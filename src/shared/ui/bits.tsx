@@ -56,8 +56,8 @@ export function EmptyState({ icon: Icon, title, hint, action }: {
         <Icon size={28} strokeWidth={1.5} className="text-accent" />
       </div>
       <div>
-        <p className="text-[15px] font-bold">{title}</p>
-        {hint && <p className="mt-1 max-w-[280px] text-[13px] text-mute">{hint}</p>}
+        <p className="text-[0.9375rem] font-bold">{title}</p>
+        {hint && <p className="mt-1 max-w-[280px] text-[0.8125rem] text-mute">{hint}</p>}
       </div>
       {action}
     </div>
@@ -77,8 +77,8 @@ export function ConfirmDialog({ title, text, confirmLabel, danger, onConfirm, on
   return (
     <div className="dialog-backdrop" onClick={onCancel}>
       <div className="dialog-card" role="alertdialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
-        <p className="text-[16px] font-bold">{title}</p>
-        <p className="mt-2 text-[14px] text-mute">{text}</p>
+        <p className="text-[1rem] font-bold">{title}</p>
+        <p className="mt-2 text-[0.875rem] text-mute">{text}</p>
         <div className="mt-5 flex gap-2">
           <button type="button" className="btn btn-ghost flex-1" onClick={onCancel}>{t('common.cancel')}</button>
           <button type="button" className={'btn flex-1 ' + (danger ? 'btn-danger' : 'btn-primary')} onClick={() => { buzz(12); onConfirm(); }}>
@@ -99,7 +99,7 @@ export function QtyStepper({ value, onChange, min = 1 }: {
         aria-label="−1" onClick={() => { buzz(6); onChange(Math.max(min, value - 1)); }}>
         <Minus size={16} strokeWidth={1.5} />
       </button>
-      <span className="tnum min-w-[38px] text-center text-[15px] font-bold">{value}</span>
+      <span className="tnum min-w-[38px] text-center text-[0.9375rem] font-bold">{value}</span>
       <button type="button" className="icon-btn" style={{ width: 40, height: 40, background: 'var(--surface2)' }}
         aria-label="+1" onClick={() => { buzz(6); onChange(value + 1); }}>
         <Plus size={16} strokeWidth={1.5} />

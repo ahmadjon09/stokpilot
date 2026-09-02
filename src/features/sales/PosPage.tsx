@@ -107,29 +107,29 @@ export default function PosPage() {
   };
 
   const cartPanel = (
-    <div className="card flex flex-col overflow-hidden">
+    <div className="card flex max-h-full flex-col overflow-hidden">
       <button type="button" className="flex items-center justify-between px-4 py-3" onClick={() => setCartOpen((o) => !o)} aria-expanded={cartOpen}>
-        <span className="flex items-center gap-2 text-[15px] font-bold">
-          <ShoppingCart size={18} strokeWidth={1.5} className="text-accent" />
-          {t('sales.cart')} · {lines.length}
+        <span className="flex min-w-0 items-center gap-2 text-[0.9375rem] font-bold">
+          <ShoppingCart size={18} strokeWidth={1.5} className="flex-none text-accent" />
+          <span className="truncate">{t('sales.cart')} · {lines.length}</span>
         </span>
-        <span className="flex items-center gap-2">
-          <span className="tnum text-[16px] font-extrabold">{formatMoney(total)}</span>
+        <span className="flex flex-none items-center gap-2">
+          <span className="tnum text-[1rem] font-extrabold">{formatMoney(total)}</span>
           <span className="text-mute">{cartOpen ? <Minus size={16} strokeWidth={1.5} /> : <Plus size={16} strokeWidth={1.5} />}</span>
         </span>
       </button>
 
       {cartOpen && (
-        <>
-          <div className="row-list max-h-[220px] overflow-y-auto border-t border-line">
-            {lines.length === 0 && <p className="px-4 py-5 text-center text-[13px] text-mute">{t('sales.emptyCart')}</p>}
+        <div className="flex min-h-0 flex-col overflow-y-auto">
+          <div className="row-list shrink-0 border-t border-line">
+            {lines.length === 0 && <p className="px-4 py-5 text-center text-[0.8125rem] text-mute">{t('sales.emptyCart')}</p>}
             {lines.map((l) => (
               <div key={l.productId} className="flex items-center gap-2 px-3 py-2">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13.5px] font-semibold">{l.product.name}</p>
-                  <p className="tnum text-[12px] text-mute">{formatMoney(l.product.price)} × {l.qty}</p>
+                  <p className="truncate text-[0.8438rem] font-semibold">{l.product.name}</p>
+                  <p className="tnum text-[0.75rem] text-mute">{formatMoney(l.product.price)} × {l.qty}</p>
                 </div>
-                <div className="flex items-center gap-0.5">
+                <div className="flex flex-none items-center gap-0.5">
                   <button type="button" className="icon-btn" style={{ width: 36, height: 36, background: 'var(--surface2)' }} aria-label="−1" onClick={() => changeQty(l.productId, -1)}>
                     <Minus size={15} strokeWidth={1.5} />
                   </button>
@@ -174,11 +174,11 @@ export default function PosPage() {
                 { value: 'transfer', label: t('sales.pay.transfer') },
                 { value: 'debt', label: t('sales.pay.debt') },
               ]} />
-              <div className="space-y-1 text-[13.5px]">
+              <div className="space-y-1 text-[0.8438rem]">
                 <div className="flex justify-between text-mute"><span>{t('sales.subtotal')}</span><span className="tnum">{formatMoney(subtotal)}</span></div>
                 {discount > 0 && <div className="flex justify-between" style={{ color: 'var(--bad)' }}><span>{t('sales.discount')}</span><span className="tnum">−{formatMoney(discount)}</span></div>}
                 {vatPart > 0 && <div className="flex justify-between text-mute"><span>{t('sales.vatIncluded')} ({formatNumber(vat)}%)</span><span className="tnum">{formatMoney(vatPart)}</span></div>}
-                <div className="flex justify-between pt-1 text-[16px] font-extrabold"><span>{t('common.total')}</span><span className="tnum">{formatMoney(total)}</span></div>
+                <div className="flex justify-between pt-1 text-[1rem] font-extrabold"><span>{t('common.total')}</span><span className="tnum">{formatMoney(total)}</span></div>
               </div>
               <div className="flex gap-2">
                 <button type="button" className="icon-btn border border-line" aria-label={t('sales.clearCart')}
@@ -191,7 +191,7 @@ export default function PosPage() {
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );
@@ -200,7 +200,7 @@ export default function PosPage() {
     <div className="md:grid md:grid-cols-[1fr_360px] md:gap-5">
       <div className="space-y-3">
         <div className="hidden items-center justify-between md:flex">
-          <h1 className="text-[22px] font-extrabold tracking-tight">{t('sales.title')}</h1>
+          <h1 className="text-[1.375rem] font-extrabold tracking-tight">{t('sales.title')}</h1>
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => openSheet('/sales/history')}>
             <History size={16} strokeWidth={1.5} /> {t('sales.history')}
           </button>
@@ -236,9 +236,11 @@ export default function PosPage() {
                   <span className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: 'var(--accent-soft)' }}>
                     <ImageOff size={17} strokeWidth={1.5} className="text-accent" />
                   </span>
-                  <span className="line-clamp-2 min-h-[34px] text-[13px] font-semibold leading-snug">{p.name}</span>
-                  <span className="tnum text-[14px] font-extrabold">{formatMoney(p.price)}</span>
-                  <span className="tnum text-[11px] text-mute">{t('products.stock')}: {formatNumber(p.stock)}</span>
+                  <span className="line-clamp-2 w-full text-[0.8125rem] font-semibold leading-snug" style={{ minHeight: '2.4em' }}>{p.name}</span>
+                  <span className="tnum w-full truncate text-[0.875rem] font-extrabold">{formatMoney(p.price)}</span>
+                  <span className="tnum w-full truncate text-[0.6875rem] text-mute">
+                    {t('products.stock')}: {formatNumber(p.stock)} {t('products.unit.' + p.unit)}
+                  </span>
                 </button>
               );
             })}
@@ -251,7 +253,8 @@ export default function PosPage() {
         <div className="sticky top-6">{cartPanel}</div>
       </div>
       {lines.length > 0 && (
-        <div className="fixed inset-x-0 z-40 px-3 md:hidden" style={{ bottom: 'calc(62px + env(safe-area-inset-bottom))' }}>
+        <div className="fixed inset-x-0 z-40 px-3 md:hidden"
+          style={{ bottom: 'calc(62px + env(safe-area-inset-bottom))', maxHeight: 'calc(100dvh - 130px)' }}>
           {cartPanel}
         </div>
       )}

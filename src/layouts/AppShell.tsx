@@ -120,8 +120,8 @@ export default function AppShell() {
         <div className="flex items-center gap-2.5 px-5 py-5">
           <img src="/icon-192.png" alt="" className="h-9 w-9 rounded-xl" />
           <div>
-            <p className="text-[15px] font-extrabold leading-tight">StokPilot</p>
-            <p className="text-[10.5px] font-medium text-mute">v1.0 · offline</p>
+            <p className="text-[0.9375rem] font-extrabold leading-tight">StokPilot</p>
+            <p className="text-[0.6562rem] font-medium text-mute">v1.0 · offline</p>
           </div>
         </div>
         <nav className="flex-1 space-y-1 px-3">
@@ -134,7 +134,7 @@ export default function AppShell() {
                 to={meta.path}
                 end={meta.path === '/'}
                 className={({ isActive }) =>
-                  'flex min-h-[44px] items-center gap-3 rounded-xl px-3.5 text-[14px] font-semibold transition ' +
+                  'flex min-h-[44px] items-center gap-3 rounded-xl px-3.5 text-[0.875rem] font-semibold transition ' +
                   (isActive ? 'text-accent' : 'text-mute hover:bg-card2 hover:text-ink')
                 }
                 style={({ isActive }) => (isActive ? { background: 'var(--accent-soft)' } : undefined)}
@@ -145,7 +145,7 @@ export default function AppShell() {
             );
           })}
         </nav>
-        <p className="px-5 pb-4 text-[10.5px] text-mute">{t('app.tagline')}</p>
+        <p className="px-5 pb-4 text-[0.6562rem] text-mute">{t('app.tagline')}</p>
       </aside>
 
       {/* Mobil: top bar */}
@@ -153,7 +153,7 @@ export default function AppShell() {
         style={{ minHeight: 56, background: 'color-mix(in srgb, var(--surface) 88%, transparent)', backdropFilter: 'blur(14px)', paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="flex items-center gap-2">
           <img src="/icon-192.png" alt="" className="h-7 w-7 rounded-lg" />
-          <h1 className="text-[16px] font-extrabold">{t(titleKey)}</h1>
+          <h1 className="text-[1rem] font-extrabold">{t(titleKey)}</h1>
         </div>
         <div className="flex">
           {!inNav('customers') && (

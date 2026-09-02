@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { parseNumber, truncateDecimals } from '../lib/format';
 import { useSettings } from '../../store/settings';
 
@@ -50,19 +50,32 @@ export default function NumberInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, decimals, sep]);
 
-  // Caret pozitsiyasini tiklash
-  useEffect(() => {
+  // Caret pozitsiyasini tiklash: kursor oldidagi RAQAMLAR soni bo'yicha.
+  // Ajratgichlar (probel) qo'shilib/olib tashlanganda ham kursor to'g'ri joyda qoladi.
+  useLayoutEffect(() => {
     const el = inputRef.current;
     if (!el || !caretRef.current || !focusedRef.current) return;
     const { d, afterSep } = caretRef.current;
     caretRef.current = null;
+
+    // d ta raqamdan keyingi eng yaqin pozitsiya
     let pos = text.length;
-    for (let i = 0; i <= text.length; i++) {
-      const before = text.slice(0, i);
-      const digits = (before.match(/\d/g) || []).length;
-      const hasSep = decimals > 0 && before.includes(sep);
-      if (digits === d && hasSep === afterSep) { pos = i; break; }
-      if (digits > d) { pos = i; break; }
+    if (d === 0) {
+      const first = text.search(/\d/);
+      pos = first === -1 ? text.length : first;
+    } else {
+      let seen = 0;
+      for (let i = 0; i < text.length; i++) {
+        if (text.charCodeAt(i) >= 48 && text.charCodeAt(i) <= 57) {
+          seen += 1;
+          if (seen === d) { pos = i + 1; break; }
+        }
+      }
+    }
+    // Kursor kasr qismida bo'lgan bo'lsa — ajratgichdan keyin turishi kerak
+    if (afterSep) {
+      const idx = text.indexOf(sep);
+      if (idx !== -1 && pos <= idx) pos = idx + 1;
     }
     try { el.setSelectionRange(pos, pos); } catch { /* noop */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps

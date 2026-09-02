@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowDown, ArrowUp, Database, Download, HardDrive, Image as ImageIcon, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { db, type Snapshot } from '../../db/db';
-import { seedDemo } from '../../db/seed';
+import { seedDemo, wipeAll } from '../../db/seed';
 import { exportAllToFile, isValidBackup, restoreBackup, restoreSnapshot } from '../../shared/lib/backup';
 import { formatDateTime } from '../../shared/lib/format';
 import { processImageFile } from '../../shared/lib/img';
@@ -17,7 +17,7 @@ import { NAV_META } from '../../layouts/AppShell';
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="card p-4">
-      <h2 className="mb-3 text-[15px] font-extrabold">{title}</h2>
+      <h2 className="mb-3 text-[0.9375rem] font-extrabold">{title}</h2>
       {children}
     </section>
   );
@@ -49,6 +49,7 @@ export default function SettingsPage() {
   const [confirmWipe, setConfirmWipe] = useState(false);
   const [confirmDemo, setConfirmDemo] = useState(false);
   const [confirmRestore, setConfirmRestore] = useState<Snapshot | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const snapshots = useLiveQuery(() => db.snapshots.orderBy('createdAt').reverse().toArray(), []) ?? [];
 
@@ -100,7 +101,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-4">
       <div className="hidden md:block">
-        <h1 className="text-[22px] font-extrabold tracking-tight">{t('settings.title')}</h1>
+        <h1 className="text-[1.375rem] font-extrabold tracking-tight">{t('settings.title')}</h1>
       </div>
 
       {/* Umumiy */}
@@ -190,7 +191,7 @@ export default function SettingsPage() {
             {s.nav.map((k, i) => (
               <div key={k} className="flex items-center gap-2 px-3 py-1.5">
                 <input type="checkbox" className="h-5 w-5 accent-[var(--accent)]" checked onChange={() => toggleNav(k)} aria-label={t(NAV_META[k].labelKey)} />
-                <span className="flex-1 text-[14px] font-semibold">{t(NAV_META[k].labelKey)}</span>
+                <span className="flex-1 text-[0.875rem] font-semibold">{t(NAV_META[k].labelKey)}</span>
                 <button type="button" className="icon-btn" style={{ width: 38, height: 38 }} aria-label={t('common.up')} disabled={i === 0}
                   onClick={() => s.set({ nav: move(s.nav, i, -1) })}>
                   <ArrowUp size={16} strokeWidth={1.5} />
@@ -204,7 +205,7 @@ export default function SettingsPage() {
             {ALL_NAV.filter((k) => !s.nav.includes(k)).map((k) => (
               <div key={k} className="flex items-center gap-2 px-3 py-1.5 opacity-70">
                 <input type="checkbox" className="h-5 w-5 accent-[var(--accent)]" checked={false} onChange={() => toggleNav(k)} aria-label={t(NAV_META[k].labelKey)} />
-                <span className="flex-1 text-[14px]">{t(NAV_META[k].labelKey)}</span>
+                <span className="flex-1 text-[0.875rem]">{t(NAV_META[k].labelKey)}</span>
               </div>
             ))}
           </div>
@@ -217,7 +218,7 @@ export default function SettingsPage() {
               return (
                 <div key={k} className="flex items-center gap-2 px-3 py-1.5">
                   <input type="checkbox" className="h-5 w-5 accent-[var(--accent)]" checked onChange={() => toggleWidget(k)} aria-label={meta ? t(meta.labelKey) : k} />
-                  <span className="flex-1 text-[14px] font-semibold">{meta ? t(meta.labelKey) : k}</span>
+                  <span className="flex-1 text-[0.875rem] font-semibold">{meta ? t(meta.labelKey) : k}</span>
                   <button type="button" className="icon-btn" style={{ width: 38, height: 38 }} aria-label={t('common.up')} disabled={i === 0}
                     onClick={() => s.set({ widgets: move(s.widgets, i, -1) })}>
                     <ArrowUp size={16} strokeWidth={1.5} />
@@ -232,7 +233,7 @@ export default function SettingsPage() {
             {ALL_WIDGETS.filter((w) => !s.widgets.includes(w.key)).map((w) => (
               <div key={w.key} className="flex items-center gap-2 px-3 py-1.5 opacity-70">
                 <input type="checkbox" className="h-5 w-5 accent-[var(--accent)]" checked={false} onChange={() => toggleWidget(w.key)} aria-label={t(w.labelKey)} />
-                <span className="flex-1 text-[14px]">{t(w.labelKey)}</span>
+                <span className="flex-1 text-[0.875rem]">{t(w.labelKey)}</span>
               </div>
             ))}
           </div>
@@ -290,14 +291,14 @@ export default function SettingsPage() {
         </div>
         <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={(e) => void onImportFile(e.target.files)} />
 
-        <p className="mb-1 mt-4 text-[13px] font-bold text-mute">{t('settings.snapshots')}</p>
+        <p className="mb-1 mt-4 text-[0.8125rem] font-bold text-mute">{t('settings.snapshots')}</p>
         {snapshots.length === 0 ? (
-          <p className="text-[13px] text-mute">{t('backup.noSnapshots')}</p>
+          <p className="text-[0.8125rem] text-mute">{t('backup.noSnapshots')}</p>
         ) : (
           <div className="card row-list overflow-hidden">
             {snapshots.map((sn) => (
               <div key={sn.id} className="flex items-center justify-between px-3 py-2">
-                <span className="tnum text-[13px]">{formatDateTime(sn.createdAt)}</span>
+                <span className="tnum text-[0.8125rem]">{formatDateTime(sn.createdAt)}</span>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirmRestore(sn)}>
                   <RefreshCw size={14} strokeWidth={1.5} /> {t('settings.restore')}
                 </button>
@@ -306,11 +307,11 @@ export default function SettingsPage() {
           </div>
         )}
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <button type="button" className="btn btn-ghost" onClick={() => setConfirmDemo(true)}>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setConfirmDemo(true)}>
             <Database size={16} strokeWidth={1.5} /> {t('settings.demo')}
           </button>
-          <button type="button" className="btn btn-ghost" style={{ color: 'var(--bad)' }} onClick={() => setConfirmWipe(true)}>
+          <button type="button" className="btn btn-ghost" style={{ color: 'var(--bad)' }} disabled={busy} onClick={() => setConfirmWipe(true)}>
             <Trash2 size={16} strokeWidth={1.5} /> {t('settings.wipe')}
           </button>
         </div>
@@ -321,8 +322,8 @@ export default function SettingsPage() {
         <div className="flex items-center gap-3">
           <img src="/icon-192.png" alt="" className="h-11 w-11 rounded-xl" />
           <div>
-            <p className="text-[15px] font-extrabold">StokPilot</p>
-            <p className="text-[12.5px] text-mute">{t('app.tagline')} · {t('settings.version')} 1.0.0</p>
+            <p className="text-[0.9375rem] font-extrabold">StokPilot</p>
+            <p className="text-[0.7812rem] text-mute">{t('app.tagline')} · {t('settings.version')} 1.0.0</p>
           </div>
         </div>
       </Section>
@@ -330,16 +331,25 @@ export default function SettingsPage() {
       {confirmWipe && (
         <ConfirmDialog title={t('settings.wipe')} text={t('settings.wipeConfirm')} danger confirmLabel={t('common.delete')}
           onConfirm={() => {
-            void (async () => {
-              await db.delete();
-              window.location.reload();
-            })();
+            setConfirmWipe(false);
+            setBusy(true);
+            void wipeAll()
+              .then(() => toast(t('settings.wiped')))
+              .catch(() => toast(t('common.error')))
+              .finally(() => setBusy(false));
           }}
           onCancel={() => setConfirmWipe(false)} />
       )}
       {confirmDemo && (
         <ConfirmDialog title={t('settings.demo')} text={t('settings.demoConfirm')}
-          onConfirm={() => { void seedDemo().then(() => { toast(t('common.done')); setConfirmDemo(false); }); }}
+          onConfirm={() => {
+            setConfirmDemo(false);
+            setBusy(true);
+            void seedDemo()
+              .then(() => toast(t('settings.demoLoaded')))
+              .catch(() => toast(t('common.error')))
+              .finally(() => setBusy(false));
+          }}
           onCancel={() => setConfirmDemo(false)} />
       )}
       {confirmRestore && (

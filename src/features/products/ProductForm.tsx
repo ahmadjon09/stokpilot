@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Camera, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { db, uid, nextSku, type Product, type Unit } from '../../db/db';
+import { round2 } from '../../shared/lib/format';
 import { deleteProduct } from '../../db/actions';
 import { processImageFile } from '../../shared/lib/img';
 import { useSettings } from '../../store/settings';
@@ -24,6 +25,7 @@ interface FormState {
   newCategory: string;
   sku: string;
   unit: Unit;
+  stock: number | null;
   minStock: number | null;
   barcode: string;
   note: string;
@@ -47,7 +49,7 @@ export default function ProductFormSheet() {
   const loadedRef = useRef(false);
   const [form, setForm] = useState<FormState>({
     name: '', price: null, cost: null, categoryId: '', newCategory: '',
-    sku: '', unit: 'dona', minStock: null, barcode: '', note: '',
+    sku: '', unit: 'dona', stock: null, minStock: null, barcode: '', note: '',
   });
   const [newImages, setNewImages] = useState<{ id: string; data: string; thumb: string; size: number }[]>([]);
   const [errors, setErrors] = useState<{ name?: string; price?: string }>({});
@@ -66,7 +68,8 @@ export default function ProductFormSheet() {
       setForm({
         name: products.name, price: products.price, cost: products.cost || null,
         categoryId: products.categoryId, newCategory: '', sku: products.sku,
-        unit: products.unit, minStock: products.minStock, barcode: products.barcode, note: products.note,
+        unit: products.unit, stock: products.stock, minStock: products.minStock,
+        barcode: products.barcode, note: products.note,
       });
     } else {
       loadedRef.current = true;
@@ -126,6 +129,8 @@ export default function ProductFormSheet() {
       const now = Date.now();
       const productId = id ?? uid();
       const existing = id ? await db.products.get(id) : undefined;
+      const prevStock = existing?.stock ?? 0;
+      const nextStock = round2(form.stock ?? 0);
       const product: Product = {
         id: productId,
         sku: form.sku.trim() || (await nextSku()),
@@ -135,7 +140,7 @@ export default function ProductFormSheet() {
         cost: form.cost ?? 0,
         price: form.price ?? 0,
         minStock: form.minStock ?? defaultMinStock,
-        stock: existing?.stock ?? 0,
+        stock: nextStock,
         barcode: form.barcode.trim(),
         note: form.note.trim(),
         imageIds: [...(existing?.imageIds ?? []), ...newImages.map((i) => i.id)],
@@ -143,6 +148,21 @@ export default function ProductFormSheet() {
         updatedAt: now,
       };
       await db.products.put(product);
+
+      // Qoldiq qo'lda o'zgartirilsa — audit uchun harakat yozuvi
+      const delta = round2(nextStock - prevStock);
+      if (delta !== 0) {
+        await db.moves.add({
+          id: uid(),
+          productId,
+          productName: product.name,
+          type: existing ? 'recount' : 'in',
+          qty: delta,
+          note: existing ? t('products.stockEdited') : t('products.stockInitial'),
+          createdAt: now,
+        });
+      }
+
       for (const im of newImages) {
         await db.images.add({ id: im.id, productId, data: im.data, thumb: im.thumb, size: im.size, createdAt: now });
       }
@@ -238,6 +258,20 @@ export default function ProductFormSheet() {
         )}
       </Field>
 
+      <div className="grid grid-cols-2 gap-3">
+        <Field label={t('products.stock')} hint={isEdit ? t('products.stockHintEdit') : t('products.stockHintNew')}>
+          <NumberInput value={form.stock} onChange={(v) => set('stock', v)} decimals={2} placeholder="0" ariaLabel={t('products.stock')} />
+        </Field>
+        <Field label={t('products.unit')}>
+          <select className="input" value={form.unit} onChange={(e) => set('unit', e.target.value as Unit)}>
+            <option value="dona">{t('products.unit.dona')}</option>
+            <option value="kg">{t('products.unit.kg')}</option>
+            <option value="litr">{t('products.unit.litr')}</option>
+            <option value="metr">{t('products.unit.metr')}</option>
+          </select>
+        </Field>
+      </div>
+
       {/* Qo'shimcha maydonlar (accordion) */}
       <div className="mt-1 border-t border-line">
         <button type="button" className="acc-head" aria-expanded={more} onClick={() => setMore((m) => !m)}>
@@ -250,23 +284,13 @@ export default function ProductFormSheet() {
               <Field label={t('products.sku')}>
                 <input className="input" value={form.sku} onChange={(e) => set('sku', e.target.value)} />
               </Field>
-              <Field label={t('products.unit')}>
-                <select className="input" value={form.unit} onChange={(e) => set('unit', e.target.value as Unit)}>
-                  <option value="dona">{t('products.unit.dona')}</option>
-                  <option value="kg">{t('products.unit.kg')}</option>
-                  <option value="litr">{t('products.unit.litr')}</option>
-                  <option value="metr">{t('products.unit.metr')}</option>
-                </select>
-              </Field>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label={t('products.minStock')}>
-                <NumberInput value={form.minStock} onChange={(v) => set('minStock', v)} decimals={0} />
-              </Field>
               <Field label={t('products.barcode')}>
                 <input className="input" value={form.barcode} onChange={(e) => set('barcode', e.target.value)} inputMode="numeric" />
               </Field>
             </div>
+            <Field label={t('products.minStock')} hint={t('products.minStockHint')}>
+              <NumberInput value={form.minStock} onChange={(v) => set('minStock', v)} decimals={0} />
+            </Field>
             <Field label={t('common.note')}>
               <textarea className="input" value={form.note} onChange={(e) => set('note', e.target.value)} rows={2} />
             </Field>

@@ -23,7 +23,7 @@ export default function CustomersPage() {
   return (
     <div className="space-y-3">
       <div className="hidden md:block">
-        <h1 className="text-[22px] font-extrabold tracking-tight">{t('customers.title')}</h1>
+        <h1 className="text-[1.375rem] font-extrabold tracking-tight">{t('customers.title')}</h1>
       </div>
 
       <Segmented value={filter} onChange={setFilter} options={[
@@ -50,15 +50,15 @@ export default function CustomersPage() {
                   : <Building2 size={17} strokeWidth={1.5} className="text-accent" />}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[14.5px] font-semibold">{c.name}</span>
-                <span className="block truncate text-[12px] text-mute">{c.phone || t('customers.kind.' + c.kind)}</span>
+                <span className="block truncate text-[0.9062rem] font-semibold">{c.name}</span>
+                <span className="block truncate text-[0.75rem] text-mute">{c.phone || t('customers.kind.' + c.kind)}</span>
               </span>
               {c.balance !== 0 && (
-                <span className="text-right">
-                  <span className="tnum block text-[14px] font-bold" style={{ color: c.balance > 0 ? 'var(--bad)' : 'var(--ok)' }}>
+                <span className="flex-none text-right">
+                  <span className="tnum block text-[0.875rem] font-bold" style={{ color: c.balance > 0 ? 'var(--bad)' : 'var(--ok)' }}>
                     {formatMoney(Math.abs(c.balance))}
                   </span>
-                  <span className="block text-[11px] text-mute">{c.balance > 0 ? t('customers.owes') : t('customers.weOwe')}</span>
+                  <span className="block text-[0.6875rem] text-mute">{c.balance > 0 ? t('customers.owes') : t('customers.weOwe')}</span>
                 </span>
               )}
             </button>

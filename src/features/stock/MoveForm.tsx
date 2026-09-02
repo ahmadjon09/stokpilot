@@ -54,7 +54,7 @@ export default function MoveFormSheet() {
       <Field label={t('common.selectProduct')} required error={!product ? err : null}>
         <button type="button" className="input flex items-center justify-between text-left" onClick={() => setPickerOpen(true)}>
           <span className={product ? '' : 'text-mute'}>{product ? product.name : t('common.selectProduct')}</span>
-          {product && <span className="tnum text-[13px] text-mute">{formatNumber(product.stock)} {t('products.unit.' + product.unit)}</span>}
+          {product && <span className="tnum text-[0.8125rem] text-mute">{formatNumber(product.stock)} {t('products.unit.' + product.unit)}</span>}
         </button>
       </Field>
 

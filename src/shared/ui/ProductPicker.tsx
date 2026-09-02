@@ -43,10 +43,10 @@ export default function ProductPicker({ onClose, onPick, title }: {
               <Package size={17} strokeWidth={1.5} className="text-accent" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[14.5px] font-semibold">{p.name}</span>
-              <span className="block text-[12px] text-mute">{p.sku} · {t('products.stock')}: {formatNumber(p.stock)} {t('products.unit.' + p.unit)}</span>
+              <span className="block truncate text-[0.9062rem] font-semibold">{p.name}</span>
+              <span className="block truncate text-[0.75rem] text-mute">{p.sku} · {t('products.stock')}: {formatNumber(p.stock)} {t('products.unit.' + p.unit)}</span>
             </span>
-            <span className="tnum text-[14px] font-bold">{formatMoney(p.price)}</span>
+            <span className="tnum flex-none text-[0.875rem] font-bold">{formatMoney(p.price)}</span>
           </button>
         ))}
       </div>

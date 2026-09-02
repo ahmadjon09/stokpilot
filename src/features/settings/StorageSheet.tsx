@@ -111,28 +111,28 @@ export default function StorageSheet() {
       <div className="card mb-3 p-4">
         {estimate ? (
           <>
-            <div className="mb-2 flex justify-between text-[13px]">
+            <div className="mb-2 flex justify-between text-[0.8125rem]">
               <span className="flex items-center gap-1.5 font-bold"><HardDrive size={15} strokeWidth={1.5} /> {t('storage.used')}: {formatBytes(estimate.usage)}</span>
               <span className="text-mute">{t('storage.total')}: {formatBytes(estimate.quota)}</span>
             </div>
             <div className="h-2.5 w-full overflow-hidden rounded-full" style={{ background: 'var(--surface2)' }}>
               <div className="h-full rounded-full" style={{ width: `${Math.max(1, (estimate.usage / Math.max(estimate.quota, 1)) * 100)}%`, background: 'var(--accent)' }} />
             </div>
-            <p className="mt-1.5 text-[12px] text-mute">{t('storage.free')}: {formatBytes(Math.max(0, estimate.quota - estimate.usage))}</p>
+            <p className="mt-1.5 text-[0.75rem] text-mute">{t('storage.free')}: {formatBytes(Math.max(0, estimate.quota - estimate.usage))}</p>
           </>
         ) : (
-          <p className="text-[13px] text-mute">{t('storage.storageUnavailable')}</p>
+          <p className="text-[0.8125rem] text-mute">{t('storage.storageUnavailable')}</p>
         )}
       </div>
 
       {/* Jadval bo'yicha */}
-      <p className="mb-2 text-[13px] font-bold text-mute">{t('storage.byModel')}</p>
+      <p className="mb-2 text-[0.8125rem] font-bold text-mute">{t('storage.byModel')}</p>
       <div className="card row-list mb-3 overflow-hidden">
         {stats.map((st) => {
           const pct = totalBytes > 0 ? (st.bytes / totalBytes) * 100 : 0;
           return (
             <div key={st.name} className="px-3.5 py-2.5">
-              <div className="flex items-center justify-between text-[13.5px]">
+              <div className="flex items-center justify-between text-[0.8438rem]">
                 <span className="font-semibold">{TABLE_LABELS[st.name] ?? st.name}</span>
                 <span className="tnum text-mute">{st.count} {t('common.records')} · {formatBytes(st.bytes)}</span>
               </div>
@@ -140,7 +140,7 @@ export default function StorageSheet() {
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: 'var(--surface2)' }}>
                   <div className="h-full rounded-full" style={{ width: `${Math.max(pct, st.bytes > 0 ? 2 : 0)}%`, background: pct > 60 ? 'var(--warn)' : 'var(--accent)' }} />
                 </div>
-                <span className="tnum w-11 text-right text-[11.5px] text-mute">{pct.toFixed(1)}%</span>
+                <span className="tnum w-11 text-right text-[0.7188rem] text-mute">{pct.toFixed(1)}%</span>
               </div>
             </div>
           );
@@ -150,13 +150,13 @@ export default function StorageSheet() {
       {/* Eng katta rasmlar */}
       {topImages.length > 0 && (
         <>
-          <p className="mb-2 text-[13px] font-bold text-mute">{t('storage.largestImages')}</p>
+          <p className="mb-2 text-[0.8125rem] font-bold text-mute">{t('storage.largestImages')}</p>
           <div className="card row-list mb-3 overflow-hidden">
             {topImages.map((im) => (
               <div key={im.id} className="flex items-center gap-3 px-3.5 py-2">
                 <img src={im.thumb} alt="" className="h-10 w-10 rounded-lg border border-line object-cover" />
-                <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold">{im.name}</span>
-                <span className="tnum text-[12.5px] text-mute">{formatBytes(im.size)}</span>
+                <span className="min-w-0 flex-1 truncate text-[0.8438rem] font-semibold">{im.name}</span>
+                <span className="tnum text-[0.7812rem] text-mute">{formatBytes(im.size)}</span>
               </div>
             ))}
           </div>
@@ -178,7 +178,7 @@ export default function StorageSheet() {
           <Trash2 size={16} strokeWidth={1.5} /> {t('storage.wipe')}
         </button>
       </div>
-      <p className="mt-2 text-center text-[11.5px] text-mute">{t('common.date')}: {formatDateTime(Date.now())}</p>
+      <p className="mt-2 text-center text-[0.7188rem] text-mute">{t('common.date')}: {formatDateTime(Date.now())}</p>
 
       {confirmRecompress && (
         <ConfirmDialog title={t('storage.recompress')} text={t('storage.recompressConfirm')}

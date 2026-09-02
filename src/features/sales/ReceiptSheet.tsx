@@ -40,13 +40,13 @@ export default function ReceiptSheet() {
       <div className="print-area receipt mx-auto max-w-[340px] py-2">
         <div className="text-center">
           {biz.logo && <img src={biz.logo} alt="" className="mx-auto mb-2 h-12 w-12 rounded-lg object-contain" />}
-          <p className="text-[15px] font-extrabold">{biz.name}</p>
-          <p className="text-[11.5px] text-mute">StokPilot · {formatDateTime(sale.createdAt)}</p>
+          <p className="text-[0.9375rem] font-extrabold">{biz.name}</p>
+          <p className="text-[0.7188rem] text-mute">StokPilot · {formatDateTime(sale.createdAt)}</p>
         </div>
         <div className="rline" />
         <table>
           <thead>
-            <tr className="text-[11px] uppercase text-mute">
+            <tr className="text-[0.6875rem] uppercase text-mute">
               <th>{t('common.name')}</th>
               <th className="text-center">{t('common.qty')}</th>
               <th className="text-right">{t('common.sum')}</th>
@@ -55,9 +55,9 @@ export default function ReceiptSheet() {
           <tbody>
             {sale.items.map((it, i) => (
               <tr key={i}>
-                <td>
+                <td className="pr-2">
                   {it.name}
-                  <span className="block text-[10.5px] text-mute">{formatMoney(it.price)} × {formatNumber(it.qty)} {t('products.unit.' + it.unit)}</span>
+                  <span className="block text-[0.6562rem] text-mute">{formatMoney(it.price)} × {formatNumber(it.qty)} {t('products.unit.' + it.unit)}</span>
                 </td>
                 <td className="tnum text-center align-top">{formatNumber(it.qty)}</td>
                 <td className="tnum text-right align-top font-semibold">{formatMoney(it.price * it.qty)}</td>
@@ -66,7 +66,7 @@ export default function ReceiptSheet() {
           </tbody>
         </table>
         <div className="rline" />
-        <div className="space-y-1 text-[13px]">
+        <div className="space-y-1 text-[0.8125rem]">
           <div className="flex justify-between"><span>{t('sales.subtotal')}</span><span className="tnum">{formatMoney(sale.subtotal)}</span></div>
           {sale.discountType !== 'none' && (
             <div className="flex justify-between"><span>{t('sales.discount')}{sale.discountType === 'percent' ? ` (${formatNumber(sale.discountValue)}%)` : ''}</span><span className="tnum">−{formatMoney(sale.subtotal - sale.total)}</span></div>
@@ -74,7 +74,7 @@ export default function ReceiptSheet() {
           {biz.vat > 0 && (
             <div className="flex justify-between text-mute"><span>{t('sales.vatIncluded')} ({formatNumber(biz.vat)}%)</span><span className="tnum">{formatMoney((sale.total * biz.vat) / (100 + biz.vat))}</span></div>
           )}
-          <div className="flex justify-between pt-1 text-[16px] font-extrabold"><span>{t('common.total')}</span><span className="tnum">{formatMoney(sale.total)}</span></div>
+          <div className="flex justify-between pt-1 text-[1rem] font-extrabold"><span>{t('common.total')}</span><span className="tnum">{formatMoney(sale.total)}</span></div>
           <div className="flex justify-between text-mute"><span>{t('sales.payType')}</span><span>{payLabel}</span></div>
           {sale.customerName && <div className="flex justify-between text-mute"><span>{t('sales.customer')}</span><span>{sale.customerName}</span></div>}
           {sale.status === 'returned' && <p className="badge badge-warn">{t('sales.returned')}</p>}
@@ -82,7 +82,7 @@ export default function ReceiptSheet() {
         {biz.receiptFooter && (
           <>
             <div className="rline" />
-            <p className="text-center text-[12px]">{biz.receiptFooter}</p>
+            <p className="text-center text-[0.75rem]">{biz.receiptFooter}</p>
           </>
         )}
       </div>

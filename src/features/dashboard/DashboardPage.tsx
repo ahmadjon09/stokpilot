@@ -23,7 +23,7 @@ function KpiCard({ icon: Icon, label, value, tone }: {
         <Icon size={19} strokeWidth={1.5} style={{ color: tone === 'warn' ? 'var(--warn)' : 'var(--accent)' }} />
       </span>
       <div className="min-w-0">
-        <p className="truncate text-[12px] font-semibold text-mute">{label}</p>
+        <p className="truncate text-[0.75rem] font-semibold text-mute">{label}</p>
         <p className="kpi-num truncate">{value}</p>
       </div>
     </div>
@@ -34,8 +34,8 @@ function ChartCard({ title, sub, children }: { title: string; sub?: string; chil
   return (
     <section className="card p-4">
       <div className="mb-3">
-        <h3 className="text-[14.5px] font-bold">{title}</h3>
-        {sub && <p className="text-[12px] text-mute">{sub}</p>}
+        <h3 className="text-[0.9062rem] font-bold">{title}</h3>
+        {sub && <p className="text-[0.75rem] text-mute">{sub}</p>}
       </div>
       {children}
     </section>
@@ -119,7 +119,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-4">
       <div className="hidden md:block">
-        <h1 className="text-[22px] font-extrabold tracking-tight">{t('nav.dashboard')}</h1>
+        <h1 className="text-[1.375rem] font-extrabold tracking-tight">{t('nav.dashboard')}</h1>
       </div>
 
       {!hasData ? (
@@ -154,7 +154,7 @@ export default function DashboardPage() {
 
             {widgets.includes('categories') && (
               <ChartCard title={t('dash.byCategory')} sub={t('dash.last30')}>
-                {data.pie.length === 0 ? <p className="py-10 text-center text-[13px] text-mute">{t('dash.noData')}</p> : (
+                {data.pie.length === 0 ? <p className="py-10 text-center text-[0.8125rem] text-mute">{t('dash.noData')}</p> : (
                   <div className="flex items-center gap-2">
                     <div className="h-52 flex-1">
                       <ResponsiveContainer width="100%" height="100%">
@@ -168,7 +168,7 @@ export default function DashboardPage() {
                     </div>
                     <ul className="w-[42%] space-y-1.5">
                       {data.pie.slice(0, 6).map((x, i) => (
-                        <li key={x.name} className="flex items-center gap-2 text-[12.5px]">
+                        <li key={x.name} className="flex items-center gap-2 text-[0.7812rem]">
                           <span className="h-2.5 w-2.5 flex-none rounded-full" style={{ background: c.palette[i % c.palette.length] }} />
                           <span className="truncate text-mute">{x.name}</span>
                         </li>
@@ -181,7 +181,7 @@ export default function DashboardPage() {
 
             {widgets.includes('top') && (
               <ChartCard title={t('dash.topProducts')} sub={t('dash.last30')}>
-                {data.top.length === 0 ? <p className="py-10 text-center text-[13px] text-mute">{t('dash.noData')}</p> : (
+                {data.top.length === 0 ? <p className="py-10 text-center text-[0.8125rem] text-mute">{t('dash.noData')}</p> : (
                   <div style={{ height: 56 * data.top.length + 20 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={data.top} layout="vertical" margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
