@@ -1,9 +1,9 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowDown, ArrowUp, Database, Download, HardDrive, Image as ImageIcon, RefreshCw, Trash2, Upload } from 'lucide-react';
+import { ArrowDown, ArrowUp, Download, HardDrive, Image as ImageIcon, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { db, type Snapshot } from '../../db/db';
-import { seedDemo, wipeAll } from '../../db/seed';
+import { wipeAll } from '../../db/seed';
 import { exportAllToFile, isValidBackup, restoreBackup, restoreSnapshot } from '../../shared/lib/backup';
 import { formatDateTime } from '../../shared/lib/format';
 import { processImageFile } from '../../shared/lib/img';
@@ -47,7 +47,6 @@ export default function SettingsPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const logoRef = useRef<HTMLInputElement>(null);
   const [confirmWipe, setConfirmWipe] = useState(false);
-  const [confirmDemo, setConfirmDemo] = useState(false);
   const [confirmRestore, setConfirmRestore] = useState<Snapshot | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -307,11 +306,8 @@ export default function SettingsPage() {
           </div>
         )}
 
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setConfirmDemo(true)}>
-            <Database size={16} strokeWidth={1.5} /> {t('settings.demo')}
-          </button>
-          <button type="button" className="btn btn-ghost" style={{ color: 'var(--bad)' }} disabled={busy} onClick={() => setConfirmWipe(true)}>
+        <div className="mt-4">
+          <button type="button" className="btn btn-ghost w-full" style={{ color: 'var(--bad)' }} disabled={busy} onClick={() => setConfirmWipe(true)}>
             <Trash2 size={16} strokeWidth={1.5} /> {t('settings.wipe')}
           </button>
         </div>
@@ -339,18 +335,6 @@ export default function SettingsPage() {
               .finally(() => setBusy(false));
           }}
           onCancel={() => setConfirmWipe(false)} />
-      )}
-      {confirmDemo && (
-        <ConfirmDialog title={t('settings.demo')} text={t('settings.demoConfirm')}
-          onConfirm={() => {
-            setConfirmDemo(false);
-            setBusy(true);
-            void seedDemo()
-              .then(() => toast(t('settings.demoLoaded')))
-              .catch(() => toast(t('common.error')))
-              .finally(() => setBusy(false));
-          }}
-          onCancel={() => setConfirmDemo(false)} />
       )}
       {confirmRestore && (
         <ConfirmDialog title={t('settings.restore')} text={t('backup.restoreConfirm')}
