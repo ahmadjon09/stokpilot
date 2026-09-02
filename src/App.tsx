@@ -14,7 +14,6 @@ import CustomerFormSheet from './features/customers/CustomerForm';
 import ReportsPage from './features/reports/ReportsPage';
 import SettingsPage from './features/settings/SettingsPage';
 import StorageSheet from './features/settings/StorageSheet';
-import { seedIfEmpty } from './db/seed';
 import { applyAppearance, useSettings } from './store/settings';
 import i18n from './i18n';
 
@@ -51,11 +50,6 @@ export default function App() {
   const density = useSettings((s) => s.density);
   const font = useSettings((s) => s.font);
   const lang = useSettings((s) => s.lang);
-
-  // Birinchi ochilish: seed + tashqi ko'rinish
-  useEffect(() => {
-    void seedIfEmpty();
-  }, []);
 
   useEffect(() => {
     applyAppearance({ theme, accent, radius, density, font });
