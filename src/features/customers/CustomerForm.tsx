@@ -99,10 +99,10 @@ export default function CustomerFormSheet() {
 
       {isEdit && salesHistory.length > 0 && (
         <div className="mt-2 border-t border-line pt-3">
-          <p className="mb-2 text-[13px] font-bold text-mute">{t('customers.history')}</p>
+          <p className="mb-2 text-[0.8125rem] font-bold text-mute">{t('customers.history')}</p>
           <div className="card row-list overflow-hidden">
             {salesHistory.slice(0, 10).map((s) => (
-              <div key={s.id} className="flex items-center justify-between px-3 py-2 text-[13px]">
+              <div key={s.id} className="flex items-center justify-between px-3 py-2 text-[0.8125rem]">
                 <span className="tnum text-mute">#{s.number} · {formatDateTime(s.createdAt)}</span>
                 <span className="tnum font-bold">{formatMoney(s.total)}</span>
               </div>

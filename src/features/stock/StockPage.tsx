@@ -53,21 +53,21 @@ export default function StockPage() {
   return (
     <div className="space-y-3">
       <div className="hidden md:block">
-        <h1 className="text-[22px] font-extrabold tracking-tight">{t('stock.title')}</h1>
+        <h1 className="text-[1.375rem] font-extrabold tracking-tight">{t('stock.title')}</h1>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
         <div className="card p-3">
-          <p className="flex items-center gap-1.5 text-[11.5px] font-semibold text-mute"><Wallet size={13} strokeWidth={1.5} /> {t('stock.totalValue')}</p>
-          <p className="tnum mt-1 text-[15px] font-extrabold">{formatMoney(stats.value)}</p>
+          <p className="flex items-center gap-1.5 text-[0.7188rem] font-semibold text-mute"><Wallet size={13} strokeWidth={1.5} /> {t('stock.totalValue')}</p>
+          <p className="tnum mt-1 text-[0.9375rem] font-extrabold">{formatMoney(stats.value)}</p>
         </div>
         <div className="card p-3">
-          <p className="text-[11.5px] font-semibold text-mute">{t('stock.itemsCount')}</p>
-          <p className="tnum mt-1 text-[15px] font-extrabold">{products.length}</p>
+          <p className="text-[0.7188rem] font-semibold text-mute">{t('stock.itemsCount')}</p>
+          <p className="tnum mt-1 text-[0.9375rem] font-extrabold">{products.length}</p>
         </div>
         <div className="card p-3">
-          <p className="text-[11.5px] font-semibold text-mute" style={{ color: stats.low > 0 ? 'var(--warn)' : undefined }}>{t('stock.lowCount')}</p>
-          <p className="tnum mt-1 text-[15px] font-extrabold" style={{ color: stats.low > 0 ? 'var(--warn)' : undefined }}>{stats.low}</p>
+          <p className="text-[0.7188rem] font-semibold text-mute" style={{ color: stats.low > 0 ? 'var(--warn)' : undefined }}>{t('stock.lowCount')}</p>
+          <p className="tnum mt-1 text-[0.9375rem] font-extrabold" style={{ color: stats.low > 0 ? 'var(--warn)' : undefined }}>{stats.low}</p>
         </div>
       </div>
 
@@ -92,16 +92,18 @@ export default function StockPage() {
               return (
                 <div key={p.id} className="flex items-center gap-3 px-3 py-2.5" style={{ minHeight: 56 }}>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[14.5px] font-semibold">{p.name}</p>
-                    <p className="text-[12px] text-mute">{t('products.minStock')}: {formatNumber(p.minStock)}</p>
+                    <p className="truncate text-[0.9062rem] font-semibold">{p.name}</p>
+                    <p className="text-[0.75rem] text-mute">{t('products.minStock')}: {formatNumber(p.minStock)}</p>
                   </div>
-                  <div className="w-24">
+                  <div className="hidden w-24 flex-none sm:block">
                     <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'var(--surface2)' }}>
                       <div className="h-full rounded-full" style={{ width: `${Math.min(100, ratio * 50)}%`, background: color }} />
                     </div>
                   </div>
-                  <div className="w-[110px] text-right">
-                    <p className="tnum text-[15px] font-bold" style={{ color }}>{formatNumber(p.stock)} <span className="text-[12px] font-medium text-mute">{t('products.unit.' + p.unit)}</span></p>
+                  <div className="flex-none text-right">
+                    <p className="tnum text-[0.9375rem] font-bold" style={{ color }}>
+                      {formatNumber(p.stock)} <span className="text-[0.75rem] font-medium text-mute">{t('products.unit.' + p.unit)}</span>
+                    </p>
                   </div>
                 </div>
               );
@@ -122,12 +124,12 @@ export default function StockPage() {
                   <Icon size={16} strokeWidth={1.5} style={{ color: MOVE_COLOR[m.type] }} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-semibold">{m.productName}</p>
-                  <p className="truncate text-[12px] text-mute">
+                  <p className="truncate text-[0.875rem] font-semibold">{m.productName}</p>
+                  <p className="truncate text-[0.75rem] text-mute">
                     {t('stock.type.' + m.type)}{m.note ? ` · ${m.note}` : ''} · {formatDateTime(m.createdAt)}
                   </p>
                 </div>
-                <span className="tnum text-[14.5px] font-bold" style={{ color: m.qty >= 0 ? 'var(--ok)' : 'var(--bad)' }}>
+                <span className="tnum flex-none text-[0.9062rem] font-bold" style={{ color: m.qty >= 0 ? 'var(--ok)' : 'var(--bad)' }}>
                   {m.qty > 0 ? '+' : ''}{formatNumber(m.qty)}
                 </span>
               </div>

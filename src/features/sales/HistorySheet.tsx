@@ -39,16 +39,16 @@ export default function SalesHistorySheet() {
                   <Icon size={16} strokeWidth={1.5} className="text-accent" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="tnum text-[14px] font-bold">
+                  <p className="tnum text-[0.875rem] font-bold">
                     #{s.number}
                     {s.status === 'returned' && <span className="badge badge-warn ml-2">{t('sales.returned')}</span>}
                   </p>
-                  <p className="truncate text-[12px] text-mute">
+                  <p className="truncate text-[0.75rem] text-mute">
                     {formatDateTime(s.createdAt)} · {s.items.length} {t('sales.itemsCount')}
                     {s.customerName ? ` · ${s.customerName}` : ''}
                   </p>
                 </div>
-                <span className="tnum text-[14.5px] font-extrabold">{formatMoney(s.total)}</span>
+                <span className="tnum text-[0.9062rem] font-extrabold">{formatMoney(s.total)}</span>
                 <button type="button" className="icon-btn" aria-label={t('common.view')}
                   onClick={() => openSheet(`/sales/receipt/${s.id}`)}>
                   <Receipt size={18} strokeWidth={1.5} />

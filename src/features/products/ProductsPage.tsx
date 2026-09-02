@@ -72,7 +72,7 @@ export default function ProductsPage() {
   return (
     <div className="space-y-3">
       <div className="hidden items-center justify-between md:flex">
-        <h1 className="text-[22px] font-extrabold tracking-tight">{t('products.title')}</h1>
+        <h1 className="text-[1.375rem] font-extrabold tracking-tight">{t('products.title')}</h1>
         <button type="button" className="btn btn-primary btn-sm" onClick={() => openSheet('/products/new')}>
           <PackagePlus size={16} strokeWidth={1.5} /> {t('products.new')}
         </button>
@@ -108,7 +108,7 @@ export default function ProductsPage() {
       {/* Bulk panel */}
       {selectMode && (
         <div className="card flex items-center justify-between px-4 py-2.5">
-          <span className="text-[13.5px] font-semibold">{selected.size} / {list.length}</span>
+          <span className="text-[0.8438rem] font-semibold">{selected.size} / {list.length}</span>
           <button type="button" className="btn btn-danger btn-sm" disabled={selected.size === 0} onClick={() => setConfirmBulk(true)}>
             <Trash2 size={15} strokeWidth={1.5} /> {t('common.delete')}
           </button>
@@ -148,13 +148,13 @@ export default function ProductsPage() {
                   </span>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14.5px] font-semibold">{p.name}</p>
-                  <p className="tnum truncate text-[12px] text-mute">
+                  <p className="truncate text-[0.9062rem] font-semibold">{p.name}</p>
+                  <p className="tnum truncate text-[0.75rem] text-mute">
                     {p.sku} · {t('products.stock')}: {formatNumber(p.stock)} {t('products.unit.' + p.unit)}
                   </p>
                 </div>
-                <div className="flex flex-none flex-col items-end gap-1">
-                  <span className="tnum text-[14.5px] font-bold">{formatMoney(p.price)}</span>
+                <div className="flex flex-none flex-col items-end gap-1 text-right">
+                  <span className="tnum text-[0.9062rem] font-bold">{formatMoney(p.price)}</span>
                   <StockBadge p={p} />
                 </div>
               </div>
@@ -164,7 +164,7 @@ export default function ProductsPage() {
       )}
 
       {list.length > 0 && (
-        <p className="text-center text-[12px] text-mute">{list.length} {t('products.count')}</p>
+        <p className="text-center text-[0.75rem] text-mute">{list.length} {t('products.count')}</p>
       )}
 
       {confirmBulk && (

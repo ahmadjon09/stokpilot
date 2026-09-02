@@ -87,7 +87,7 @@ export default function ReportsPage() {
   return (
     <div className="print-area space-y-4">
       <div className="no-print hidden items-center justify-between md:flex">
-        <h1 className="text-[22px] font-extrabold tracking-tight">{t('reports.title')}</h1>
+        <h1 className="text-[1.375rem] font-extrabold tracking-tight">{t('reports.title')}</h1>
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => window.print()}>
           <Printer size={16} strokeWidth={1.5} /> {t('common.print')} / PDF
         </button>
@@ -117,14 +117,14 @@ export default function ReportsPage() {
               { icon: Wallet, label: t('reports.avgCheck'), value: formatMoney(round2(data.avgCheck)) },
             ].map((k, i) => (
               <div key={i} className="card p-3.5">
-                <p className="flex items-center gap-1.5 text-[12px] font-semibold text-mute"><k.icon size={13} strokeWidth={1.5} /> {k.label}</p>
+                <p className="flex items-center gap-1.5 text-[0.75rem] font-semibold text-mute"><k.icon size={13} strokeWidth={1.5} /> {k.label}</p>
                 <p className="kpi-num mt-1">{k.value}</p>
               </div>
             ))}
           </div>
 
           <section className="card p-4">
-            <h3 className="mb-3 text-[14.5px] font-bold">{t('reports.byDays')}</h3>
+            <h3 className="mb-3 text-[0.9062rem] font-bold">{t('reports.byDays')}</h3>
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={data.byDays} margin={{ top: 6, right: 6, left: -14, bottom: 0 }}>
@@ -141,13 +141,13 @@ export default function ReportsPage() {
           {/* ABC */}
           <section className="card overflow-hidden">
             <div className="flex items-center justify-between px-4 pt-4">
-              <h3 className="text-[14.5px] font-bold">{t('reports.topByRevenue')}</h3>
+              <h3 className="text-[0.9062rem] font-bold">{t('reports.topByRevenue')}</h3>
               <button type="button" className="btn btn-ghost btn-sm no-print" onClick={exportAbc}>{t('reports.exportCsv')}</button>
             </div>
             <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[520px] text-[13px]">
+              <table className="w-full min-w-[520px] text-[0.8125rem]">
                 <thead>
-                  <tr className="border-b border-line text-left text-[11px] uppercase text-mute">
+                  <tr className="border-b border-line text-left text-[0.6875rem] uppercase text-mute">
                     <th className="px-4 py-2">{t('common.name')}</th>
                     <th className="px-2 py-2 text-right">{t('reports.soldQty')}</th>
                     <th className="px-2 py-2 text-right">{t('reports.revenue')}</th>
@@ -178,18 +178,18 @@ export default function ReportsPage() {
             {/* Kam qolgan */}
             <section className="card overflow-hidden">
               <div className="flex items-center justify-between px-4 pt-4">
-                <h3 className="flex items-center gap-2 text-[14.5px] font-bold"><AlertTriangle size={16} strokeWidth={1.5} className="text-warn" /> {t('reports.lowStockReport')}</h3>
+                <h3 className="flex items-center gap-2 text-[0.9062rem] font-bold"><AlertTriangle size={16} strokeWidth={1.5} className="text-warn" /> {t('reports.lowStockReport')}</h3>
                 <button type="button" className="btn btn-ghost btn-sm no-print" onClick={exportLow}>{t('reports.exportCsv')}</button>
               </div>
               <div className="row-list mt-3">
-                {data.low.length === 0 && <p className="px-4 py-6 text-center text-[13px] text-mute">{t('dash.noData')}</p>}
+                {data.low.length === 0 && <p className="px-4 py-6 text-center text-[0.8125rem] text-mute">{t('dash.noData')}</p>}
                 {data.low.map((p) => (
                   <div key={p.id} className="flex items-center justify-between px-4 py-2.5">
                     <div className="min-w-0">
-                      <p className="truncate text-[13.5px] font-semibold">{p.name}</p>
-                      <p className="text-[11.5px] text-mute">{p.sku}</p>
+                      <p className="truncate text-[0.8438rem] font-semibold">{p.name}</p>
+                      <p className="text-[0.7188rem] text-mute">{p.sku}</p>
                     </div>
-                    <span className="tnum text-[13.5px] font-bold" style={{ color: p.stock <= 0 ? 'var(--bad)' : 'var(--warn)' }}>
+                    <span className="tnum text-[0.8438rem] font-bold" style={{ color: p.stock <= 0 ? 'var(--bad)' : 'var(--warn)' }}>
                       {formatNumber(p.stock)} / {formatNumber(p.minStock)}
                     </span>
                   </div>
@@ -200,14 +200,14 @@ export default function ReportsPage() {
             {/* O'lik zaxira */}
             <section className="card overflow-hidden">
               <div className="px-4 pt-4">
-                <h3 className="flex items-center gap-2 text-[14.5px] font-bold"><Archive size={16} strokeWidth={1.5} className="text-mute" /> {t('reports.deadStock')}</h3>
+                <h3 className="flex items-center gap-2 text-[0.9062rem] font-bold"><Archive size={16} strokeWidth={1.5} className="text-mute" /> {t('reports.deadStock')}</h3>
               </div>
               <div className="row-list mt-3">
-                {data.dead.length === 0 && <p className="px-4 py-6 text-center text-[13px] text-mute">{t('dash.noData')}</p>}
+                {data.dead.length === 0 && <p className="px-4 py-6 text-center text-[0.8125rem] text-mute">{t('dash.noData')}</p>}
                 {data.dead.map((p) => (
                   <div key={p.id} className="flex items-center justify-between px-4 py-2.5">
-                    <p className="min-w-0 truncate text-[13.5px] font-semibold">{p.name}</p>
-                    <span className="tnum text-[13.5px] text-mute">{formatNumber(p.stock)} {t('products.unit.' + p.unit)} · {formatMoney(p.stock * p.cost)}</span>
+                    <p className="min-w-0 truncate text-[0.8438rem] font-semibold">{p.name}</p>
+                    <span className="tnum text-[0.8438rem] text-mute">{formatNumber(p.stock)} {t('products.unit.' + p.unit)} · {formatMoney(p.stock * p.cost)}</span>
                   </div>
                 ))}
               </div>

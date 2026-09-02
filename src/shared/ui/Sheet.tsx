@@ -22,17 +22,24 @@ export default function Sheet({ title, onClose, children, footer, wide }: SheetP
   const startY = useRef(0);
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // onClose har renderda yangi funksiya bo'lishi mumkin — ref orqali barqaror ushlaymiz,
+  // aks holda effekt har bosishda qayta ishga tushib, inputdan fokusni o'g'irlaydi.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRef.current(); };
     window.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    panelRef.current?.focus();
+    // Faqat ochilishda fokus — mavjud fokusni buzmaslik uchun
+    const el = panelRef.current;
+    if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
     return () => {
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <>
