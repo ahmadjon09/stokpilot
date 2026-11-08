@@ -2,13 +2,14 @@ import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Banknote, ChevronRight, CreditCard, Landmark, Receipt, RotateCcw, Search, UserRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { db, type PayType } from '../../db/db';
-import { returnSale } from '../../db/actions';
+import { db, type PayType, type Sale } from '../../db/db';
+import { hasReturnableItems } from '../../db/returns';
 import { formatDateTime, formatMoney } from '../../shared/lib/format';
-import { ConfirmDialog, EmptyState } from '../../shared/ui/bits';
+import { EmptyState } from '../../shared/ui/bits';
 import { useCloseSheet, useOpenSheet } from '../../shared/lib/nav';
-import { buzz, toast } from '../../shared/lib/misc';
+import { buzz } from '../../shared/lib/misc';
 import Sheet from '../../shared/ui/Sheet';
+import ReturnSheet from './ReturnSheet';
 
 const PAY_ICON: Record<PayType, typeof Banknote> = {
   cash: Banknote, card: CreditCard, transfer: Landmark, debt: UserRound,
@@ -22,6 +23,13 @@ const PAY_ICON: Record<PayType, typeof Banknote> = {
  * fonini meros qilib oladi — shu sababli orqada POS sahifasi saqlanib qoladi
  * va "orqaga" bosilganda tarixga emas, savdoga qaytadi (kutilgan xatti-harakat).
  */
+/**
+ * Chekning qaytarishlardan keyingi aniq summasi (hisobotlar bilan bir xil mantiq).
+ */
+function netTotal(sale: Sale): number {
+  return Math.max(0, sale.total - (sale.refundedAmount ?? 0));
+}
+
 export default function SalesHistorySheet() {
   const { t } = useTranslation();
   const openSheet = useOpenSheet();
@@ -31,7 +39,8 @@ export default function SalesHistorySheet() {
     () => db.sales.orderBy('createdAt').reverse().limit(120).toArray(),
     []
   );
-  const [confirmReturn, setConfirmReturn] = useState<string | null>(null);
+  // Qaytarish oynasi uchun tanlangan chek (satr darajasida tanlov)
+  const [returnTarget, setReturnTarget] = useState<Sale | null>(null);
   const [q, setQ] = useState('');
   const [onlyDone, setOnlyDone] = useState(false);
 
@@ -39,7 +48,8 @@ export default function SalesHistorySheet() {
     const rows = sales ?? [];
     const s = q.trim().toLowerCase();
     return rows.filter((x) => {
-      if (onlyDone && x.status === 'returned') return false;
+      // "Faqat qaytarilmaganlar" — qismli qaytarilganlar ham istisno
+      if (onlyDone && x.status !== 'done') return false;
       if (!s) return true;
       return (
         String(x.number).includes(s) ||
@@ -112,13 +122,20 @@ export default function SalesHistorySheet() {
                   <p className="tnum flex items-center gap-2 text-[0.875rem] font-bold">
                     #{s.number}
                     {s.status === 'returned' && <span className="badge badge-warn">{t('sales.returned')}</span>}
+                    {s.status === 'partial' && <span className="badge badge-warn">{t('sales.partial')}</span>}
                   </p>
                   <p className="truncate text-[0.75rem] text-mute">
                     {formatDateTime(s.createdAt)} · {s.items.length} {t('sales.itemsCount')}
                     {s.customerName ? ` · ${s.customerName}` : ''}
                   </p>
                 </div>
-                <span className="tnum flex-none text-[0.9062rem] font-extrabold">{formatMoney(s.total)}</span>
+                <span
+                  className="tnum flex-none text-[0.9062rem] font-extrabold"
+                  style={s.status !== 'done' ? { textDecoration: 'line-through', color: 'var(--muted)' } : undefined}
+                  title={s.status !== 'done' ? t('sales.netAmount') + ': ' + formatMoney(netTotal(s)) : undefined}
+                >
+                  {formatMoney(netTotal(s))}
+                </span>
 
                 {/* Amallar — qator bosilishini to'xtatadi (event bubbling) */}
                 <button
@@ -129,13 +146,14 @@ export default function SalesHistorySheet() {
                 >
                   <ChevronRight size={18} strokeWidth={1.5} />
                 </button>
-                {s.status === 'done' && (
+                {/* Qaytarish — qoldiq bo'lsa har doim ochiq (qismli qaytarish) */}
+                {hasReturnableItems(s) && (
                   <button
                     type="button"
                     className="icon-btn flex-none"
                     style={{ color: 'var(--bad)' }}
                     aria-label={t('sales.return')}
-                    onClick={(e) => { e.stopPropagation(); setConfirmReturn(s.id); }}
+                    onClick={(e) => { e.stopPropagation(); setReturnTarget(s); }}
                   >
                     <RotateCcw size={17} strokeWidth={1.5} />
                   </button>
@@ -146,20 +164,18 @@ export default function SalesHistorySheet() {
         </div>
       )}
 
-      {confirmReturn && (
-        <ConfirmDialog
-          title={t('sales.return')}
-          text={t('sales.returnConfirm')}
-          danger
-          confirmLabel={t('sales.return')}
-          onConfirm={() => {
-            const saleId = confirmReturn;
-            setConfirmReturn(null);
-            void returnSale(saleId)
-              .then(() => { buzz(16); toast(t('sales.returned')); })
-              .catch(() => toast(t('common.error')));
+      {returnTarget && (
+        <ReturnSheet
+          sale={returnTarget}
+          onClose={() => setReturnTarget(null)}
+          // Qaytarishdan keyin yangilangan chekni qayta ochamiz — foydalanuvchi
+          // darhol "yana qaytarish mumkinmi" ni ko'radi (bir necha dona).
+          onDone={(saleId) => {
+            setReturnTarget(null);
+            void db.sales.get(saleId).then((fresh) => {
+              if (fresh && hasReturnableItems(fresh)) open(fresh.id);
+            });
           }}
-          onCancel={() => setConfirmReturn(null)}
         />
       )}
     </Sheet>

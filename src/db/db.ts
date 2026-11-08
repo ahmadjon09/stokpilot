@@ -1,5 +1,5 @@
 import Dexie, { type Table, type Transaction } from 'dexie';
-import { migrateV1toV2, migrateV2toV3, type MigrationReport } from './migrations';
+import { mergeReports, migrateV1toV2, migrateV2toV3, migrateV3toV4, type MigrationReport } from './migrations';
 
 export type Unit = 'dona' | 'kg' | 'litr' | 'metr';
 
@@ -55,8 +55,17 @@ export interface SaleItem {
   unit: Unit;
   price: number;
   cost: number;
+  /** SOTILGAN miqdor — hech qachon o'zgartirilmaydi (audit uchun asos) */
   qty: number;
+  /**
+   * Shu satrdan qaytarilgan jami miqdor (barcha qismli qaytarishlar yig'indisi).
+   * Qoldiq = `qty - returnedQty`. v4 da qo'shildi; legacy cheklarda 0.
+   */
+  returnedQty: number;
 }
+
+/** Chek holati — qismli qaytarishni ham qamrab oladi */
+export type SaleStatus = 'done' | 'partial' | 'returned';
 
 export interface Sale {
   id: string;
@@ -74,7 +83,17 @@ export interface Sale {
   debtAmount: number;
   customerId: string;
   customerName: string;
-  status: 'done' | 'returned';
+  /**
+   * 'done'     — hech narsa qaytarilmagan
+   * 'partial'  — bir qismi qaytarilgan
+   * 'returned' — hamma satr to'liq qaytarilgan
+   * Qiymat doim `saleStatus()` bilan qayta hisoblanadi (qo'lda yozilmaydi).
+   */
+  status: SaleStatus;
+  /** Qaytarilgan tovar qiymati (chegirma ulushi ayirilgan holda) */
+  refundedAmount: number;
+  /** Qaytarilgan tovarlarning tannarxi — foyda qayta hisobi uchun */
+  refundedCost: number;
   note: string;
   createdAt: number;
 }
@@ -140,6 +159,49 @@ export interface LedgerEntry {
   createdAt: number;
 }
 
+/* ----------------------------------------------------------------------- */
+/*  Qaytarish dalolatnomalari (immutable audit trail)                       */
+/* ----------------------------------------------------------------------- */
+
+/** Dalolatnomadagi bitta satr — sotilgan paytdagi narx/tannarx nusxasi */
+export interface ReturnLine {
+  /** `Sale.items` dagi indeks — qaysi satr qaytarilgani */
+  index: number;
+  productId: string;
+  name: string;
+  unit: Unit;
+  price: number;
+  cost: number;
+  /** Qaytarilgan miqdor (0 dan katta) */
+  qty: number;
+  /** Shu miqdor uchun qaytarilgan summa (chegirma ulushi ayirilgan) */
+  refund: number;
+}
+
+/**
+ * Bitta qaytarish amali — o'zgarmas (immutable) hujjat.
+ * Chek "nima uchun/kim/qachon" o'zgarganini faqat shu yozuvlar orqali biladi;
+ * ular hech qachon tahrirlanmaydi yoki o'chirilmaydi.
+ */
+export interface ReturnRec {
+  id: string;
+  saleId: string;
+  saleNumber: number;
+  lines: ReturnLine[];
+  /** Jami qaytarilgan summa = lines[].refund yig'indisi */
+  amount: number;
+  /** Qaytarilgan tovarlar tannarxi */
+  cost: number;
+  /** Shu qaytarish hisobiga kamaygan mijoz qarzi (nasiya bo'lsa) */
+  debtReduced: number;
+  /** Qaytarish qanday hal qilindi */
+  settlement: 'debt' | 'cash';
+  note: string;
+  /** true — v3 → v4 migratsiyasida eski "to'liq qaytarilgan" chekdan yasalgan */
+  migrated?: boolean;
+  createdAt: number;
+}
+
 export interface LogRec {
   id: string;
   action: string;
@@ -161,7 +223,7 @@ export interface Snapshot {
  * Dexie eski versiyalardagi `.stores()` ta'riflarini o'zi saqlab qoladi —
  * shuning uchun eski bloklarni o'chirib tashlamang.
  */
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 class StokPilotDB extends Dexie {
   products!: Table<Product, string>;
@@ -171,6 +233,7 @@ class StokPilotDB extends Dexie {
   sales!: Table<Sale, string>;
   customers!: Table<Customer, string>;
   ledger!: Table<LedgerEntry, string>;
+  returns!: Table<ReturnRec, string>;
   logs!: Table<LogRec, string>;
   snapshots!: Table<Snapshot, string>;
 
@@ -207,7 +270,7 @@ class StokPilotDB extends Dexie {
       snapshots: 'id, createdAt',
     }).upgrade(async (tx) => {
       // Upgrade ichida faqat `tx.table(...)` ishlatiladi (db.* emas!)
-      this.lastMigration = await migrateV1toV2(tx);
+      this.lastMigration = mergeReports(this.lastMigration, await migrateV1toV2(tx));
     });
 
     // ── v3 — qarz daftari (ledger) + nasiya/avans ajratmasi ─────────────
@@ -220,6 +283,30 @@ class StokPilotDB extends Dexie {
     //   [partyId+createdAt]           — xronologik tarix (kompaund)
     //   partyKind+createdAt           — "barcha qarzlar" ekrani uchun
     //   saleId                        — chekdan qarzga o'tish
+    this.version(3).stores({
+      products: 'id, name, sku, categoryId, barcode, updatedAt',
+      categories: 'id, name',
+      images: 'id, productId',
+      moves: 'id, productId, createdAt, type, refId',
+      sales: 'id, createdAt, number, customerId, status, payType',
+      customers: 'id, name, kind',
+      ledger: 'id, partyId, createdAt, [partyId+createdAt], partyKind, [partyKind+createdAt], saleId',
+      returns: 'id, saleId, createdAt, [saleId+createdAt]',
+      logs: 'id, createdAt, action',
+      snapshots: 'id, createdAt',
+    }).upgrade(async (tx) => {
+      this.lastMigration = mergeReports(this.lastMigration, await migrateV2toV3(tx));
+    });
+
+    // ── v4 — donalab/qismli qaytarish ───────────────────────────────────
+    // `returns` — har bir qaytarish amali uchun o'zgarmas dalolatnoma
+    // (qaysi satrlar, qancha, qanday summa, izoh, qachon).
+    // `sales.items[].returnedQty` — satr bo'yicha qaytarilgan jami miqdor;
+    // `sales.refundedAmount/refundedCost` — yakuniy hisob uchun kэш.
+    //
+    // Indekslar:
+    //   saleId              — chek bo'yicha barcha qaytarishlar
+    //   [saleId+createdAt]  — chek tarixidagi xronologiya
     this.version(DB_VERSION).stores({
       products: 'id, name, sku, categoryId, barcode, updatedAt',
       categories: 'id, name',
@@ -228,10 +315,11 @@ class StokPilotDB extends Dexie {
       sales: 'id, createdAt, number, customerId, status, payType',
       customers: 'id, name, kind',
       ledger: 'id, partyId, createdAt, [partyId+createdAt], partyKind, [partyKind+createdAt], saleId',
+      returns: 'id, saleId, createdAt, [saleId+createdAt]',
       logs: 'id, createdAt, action',
       snapshots: 'id, createdAt',
     }).upgrade(async (tx) => {
-      this.lastMigration = await migrateV2toV3(tx);
+      this.lastMigration = mergeReports(this.lastMigration, await migrateV3toV4(tx));
     });
   }
 }
@@ -337,12 +425,13 @@ async function recoverDatabase(error: unknown): Promise<OpenResult> {
       sales: 'id, createdAt, number, customerId, status, payType',
       customers: 'id, name, kind',
       ledger: 'id, partyId, createdAt, [partyId+createdAt], partyKind, [partyKind+createdAt], saleId',
+      returns: 'id, saleId, createdAt, [saleId+createdAt]',
       logs: 'id, createdAt, action',
       snapshots: 'id, createdAt',
     });
     // Buzilgan yozuvlar `toArray()` da xato berishi mumkin — jadval bo'yicha alohida
     const out: Record<string, unknown[]> = {};
-    for (const t of ['categories', 'products', 'images', 'moves', 'sales', 'customers', 'ledger', 'logs', 'snapshots']) {
+    for (const t of ['categories', 'products', 'images', 'moves', 'sales', 'customers', 'ledger', 'returns', 'logs', 'snapshots']) {
       try {
         out[t] = await raw.table(t).toArray();
       } catch {
@@ -407,7 +496,7 @@ export async function repairDatabase(): Promise<MigrationReport> {
   await db.open();
   return db.transaction(
     'rw',
-    [db.products, db.categories, db.images, db.moves, db.sales, db.customers, db.ledger, db.logs],
-    (tx: Transaction) => migrateV2toV3(tx),
+    [db.products, db.categories, db.images, db.moves, db.sales, db.customers, db.ledger, db.returns, db.logs],
+    (tx: Transaction) => migrateV3toV4(tx),
   );
 }

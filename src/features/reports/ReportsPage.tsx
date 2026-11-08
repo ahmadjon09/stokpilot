@@ -6,6 +6,9 @@ import { useTranslation } from 'react-i18next';
 import { db } from '../../db/db';
 import { compactNum, formatMoney, formatNumber, monthShort, round2, startOfDay } from '../../shared/lib/format';
 import { exportCSV } from '../../shared/lib/csv';
+import {
+  countableSales, itemStats, saleNetTotal, sumNetProfit, sumNetRevenue,
+} from '../../shared/lib/salesStats';
 import { useAccentColors } from '../../shared/lib/theme';
 import { Segmented } from '../../shared/ui/bits';
 
@@ -24,9 +27,13 @@ export default function ReportsPage() {
   ) ?? [];
 
   const data = useMemo(() => {
-    const done = sales.filter((s) => s.status === 'done');
-    const revenue = done.reduce((s, x) => s + x.total, 0);
-    const profit = done.reduce((s, x) => s + (x.total - x.costTotal), 0);
+    /*
+     * Qaytarishlarni hisobga olamiz: holat bo'yicha emas, sof summa bo'yicha.
+     * Qismli qaytarilgan chek ham hisobotda qoladi (kamaytirilgan summada).
+     */
+    const done = countableSales(sales);
+    const revenue = sumNetRevenue(done);
+    const profit = sumNetProfit(done);
     const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
     const avgCheck = done.length > 0 ? revenue / done.length : 0;
 
@@ -35,20 +42,15 @@ export default function ReportsPage() {
     const days = Math.min(period, 30);
     for (let d = days - 1; d >= 0; d--) {
       const dayStart = startOfDay(Date.now()) - d * DAY;
-      const sum = done.filter((s) => s.createdAt >= dayStart && s.createdAt < dayStart + DAY).reduce((s, x) => s + x.total, 0);
+      const sum = done
+        .filter((s) => s.createdAt >= dayStart && s.createdAt < dayStart + DAY)
+        .reduce((s, x) => s + saleNetTotal(x), 0);
       byDays.push({ label: monthShort(dayStart), sum });
     }
 
     // ABC-tahlil
-    const prodSum = new Map<string, { name: string; qty: number; revenue: number }>();
-    for (const s of done) {
-      for (const it of s.items) {
-        const cur = prodSum.get(it.productId) ?? { name: it.name, qty: 0, revenue: 0 };
-        cur.qty += it.qty;
-        cur.revenue += it.price * it.qty;
-        prodSum.set(it.productId, cur);
-      }
-    }
+    // Sof sotilgan miqdor: qaytarilgan donalar chiqarib tashlanadi
+    const prodSum = itemStats(done);
     const totalRev = [...prodSum.values()].reduce((s, x) => s + x.revenue, 0) || 1;
     let cum = 0;
     const abc = [...prodSum.entries()]

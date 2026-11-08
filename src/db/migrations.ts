@@ -13,10 +13,11 @@
 import type { Transaction } from 'dexie';
 import {
   validateCategory, validateCustomer, validateImage, validateLedgerEntry, validateLog, validateMove,
-  validateProduct, validateSale,
+  validateProduct, validateReturn, validateSale,
 } from './validate';
-import type { Customer, ImageRec, LedgerEntry, Product, Sale } from './db';
+import type { Customer, ImageRec, LedgerEntry, Product, ReturnRec, Sale } from './db';
 import { replayLedger } from './ledger';
+import { discountFactor, returnedTotals, saleStatus } from './returns';
 import { round2 } from '../shared/lib/format';
 
 export interface MigrationReport {
@@ -29,6 +30,25 @@ export interface MigrationReport {
 }
 
 const emptyReport = (): MigrationReport => ({ repaired: {}, dropped: {}, total: 0 });
+
+/**
+ * Bir necha migratsiya qadamining hisobotini birlashtiradi.
+ *
+ * Nega kerak: har bir versiya o'z `.upgrade()` ini ishga tushiradi. Agar
+ * hisobot har safar QAYTA yozilsa, foydalanuvchi faqat oxirgi qadamning
+ * natijasini ko'radi (masalan v1→v2 da tuzatilgan 10 ta yozuv "yo'qoladi").
+ * Shuning uchun qadamlar jamlanadi.
+ */
+export function mergeReports(a: MigrationReport | null, b: MigrationReport): MigrationReport {
+  if (!a) return b;
+  const out = emptyReport();
+  for (const r of [a, b]) {
+    for (const k of Object.keys(r.repaired)) out.repaired[k] = (out.repaired[k] ?? 0) + r.repaired[k];
+    for (const k of Object.keys(r.dropped)) out.dropped[k] = (out.dropped[k] ?? 0) + r.dropped[k];
+    out.total += r.total;
+  }
+  return out;
+}
 
 function bump(report: MigrationReport, kind: 'repaired' | 'dropped', table: string): void {
   report[kind][table] = (report[kind][table] ?? 0) + 1;
@@ -156,6 +176,8 @@ export interface NormalizeOptions {
    * part of transaction" xatosi chiqadi).
    */
   ledger?: boolean;
+  /** `returns` jadvalini tekshirish (faqat v4 tranzaksiyasida mavjud) */
+  returns?: boolean;
 }
 
 export async function normalizeDatabase(
@@ -174,6 +196,9 @@ export async function normalizeDatabase(
   // `ledger` jadvali v3 da paydo bo'ldi — faqat mavjud tranzaksiyada tekshiriladi
   if (options.ledger) {
     await normalizeTable(tx, 'ledger', validateLedgerEntry, report);
+  }
+  if (options.returns) {
+    await normalizeTable(tx, 'returns', validateReturn, report);
   }
   await normalizeTable(tx, 'logs', validateLog, report);
 
@@ -317,6 +342,96 @@ export async function migrateV2toV3(tx: Transaction): Promise<MigrationReport> {
   if (newEntries.length) {
     report.repaired.ledger = (report.repaired.ledger ?? 0) + newEntries.length;
     report.total += newEntries.length;
+  }
+
+  return report;
+}
+
+/* ---------------------------------------------------------------------- */
+/*  v3 → v4: donalab/qismli qaytarish                                      */
+/* ---------------------------------------------------------------------- */
+
+/**
+ * v4 ga o'tkazish.
+ *
+ * 1) `sales.items[].returnedQty` va `refundedAmount/refundedCost` — validator
+ *    tomonidan to'ldiriladi (legacy da 0).
+ * 2) Eski, ya'ni v3 gacha "butunlay qaytarilgan" cheklar (`status: 'returned'`
+ *    bo'lib, satrlarda `returnedQty` yo'q) uchun:
+ *      - har bir satr `returnedQty = qty` qilib belgilanadi;
+ *      - bitta `returns` dalolatnomasi yaratiladi (migrated: true) — shunda
+ *        qaytarish tarixi bo'sh ko'rinmaydi va hisobotlar to'g'ri chiqadi;
+ *      - yozuv vaqti sifatida chek vaqti ishlatiladi (tarixiy aniqlik).
+ * 3) `status` qayta hisoblanadi (`saleStatus`) — 'partial' ham paydo bo'ladi.
+ *
+ * IDEMPOTENT: dalolatnomasi bor chekka hech narsa qo'shilmaydi.
+ */
+export async function migrateV3toV4(tx: Transaction): Promise<MigrationReport> {
+  const report = await normalizeDatabase(tx, { ledger: true, returns: true });
+
+  const salesTable = tx.table('sales');
+  const returnsTable = tx.table('returns');
+
+  const sales: Sale[] = await salesTable.toArray();
+  if (sales.length === 0) return report;
+
+  const existing: ReturnRec[] = await returnsTable.toArray();
+  const salesWithReturns = new Set(existing.map((r) => r.saleId));
+
+  const patchedSales: Sale[] = [];
+  const newReturns: ReturnRec[] = [];
+
+  for (const sale of sales) {
+    const fullyReturnedLegacy = sale.status === 'returned';
+    const hasQtyMarks = sale.items.some((it) => (it.returnedQty ?? 0) > 0);
+    if (!fullyReturnedLegacy || hasQtyMarks || salesWithReturns.has(sale.id)) continue;
+
+    // Legacy "to'liq qaytarilgan" chek → satrlar belgilanadi + dalolatnoma
+    const items = sale.items.map((it) => ({ ...it, returnedQty: it.qty }));
+    const totals = returnedTotals(items, discountFactor(sale));
+
+    newReturns.push({
+      id: `ret-migrated-${sale.id}`,
+      saleId: sale.id,
+      saleNumber: sale.number,
+      lines: items.map((it, index) => ({
+        index,
+        productId: it.productId,
+        name: it.name,
+        unit: it.unit,
+        price: it.price,
+        cost: it.cost,
+        qty: it.qty,
+        // Legacy chek to'liq qaytarilgan — summa chek summasiga teng
+        refund: index === items.length - 1
+          ? Math.max(0, totals.amount - items.slice(0, -1).reduce((s, x) => s + x.price * x.qty, 0))
+          : Math.max(0, it.price * it.qty),
+      })),
+      amount: totals.amount,
+      cost: totals.cost,
+      debtReduced: sale.payType === 'debt' ? totals.amount : 0,
+      settlement: sale.payType === 'debt' ? 'debt' : 'cash',
+      note: '',
+      migrated: true,
+      createdAt: sale.createdAt,
+    });
+
+    patchedSales.push({
+      ...sale,
+      items,
+      status: saleStatus({ items }),
+      refundedAmount: totals.amount,
+      refundedCost: totals.cost,
+    });
+  }
+
+  if (newReturns.length) await returnsTable.bulkPut(newReturns);
+  if (patchedSales.length) await salesTable.bulkPut(patchedSales);
+
+  if (newReturns.length) {
+    report.repaired.returns = (report.repaired.returns ?? 0) + newReturns.length;
+    report.repaired.sales = (report.repaired.sales ?? 0) + patchedSales.length;
+    report.total += newReturns.length + patchedSales.length;
   }
 
   return report;

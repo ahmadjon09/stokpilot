@@ -11,7 +11,7 @@ Backend yo'q — 100% client-side, barcha ma'lumot **IndexedDB** (Dexie.js) da, 
 |---|---|
 | Framework | React 18 + TypeScript (strict), Vite 5 |
 | Routing | React Router v6 — har bir modal/bottom-sheet alohida route (`/products/:id/edit`, `/sales/receipt/:id`, `/settings/storage`…). Back tugmasi sheet'ni yopadi, deep-link va refresh ishlaydi |
-| DB | Dexie.js (IndexedDB), **versiyalangan schema + migratsiya** (`db.version(1..3)`, `onupgradeneeded` ichida validatsiya/tiklash) |
+| DB | Dexie.js (IndexedDB), **versiyalangan schema + migratsiya** (`db.version(1..4)`, `onupgradeneeded` ichida validatsiya/tiklash) |
 | State | Zustand (persist) sozlamalar uchun |
 | UI | Tailwind CSS v4 + CSS-variable theme tokenlari |
 | Charts | Recharts (responsive, theme-aware) |
@@ -58,7 +58,7 @@ Xotira bo'limida qo'lda "Ma'lumotlarni tekshirish" (`repairDatabase`) tugmasi bo
 - **Dashboard** — 4 KPI, sotuv dinamikasi (line), kategoriya taqsimoti (donut), top-10 (bar), zaxira harakati (area). Widgetlar sozlamada yoqiladi/o'chiriladi va tartibi o'zgaradi.
 - **Mahsulotlar** — SKU, kategoriya, birlik, tannarx/narx, min. qoldiq, shtrix-kod, ko'p rasm (canvas resize 1200px + WebP/JPEG q=0.8, thumbnail 200px alohida store'da), qidiruv/filtr/saralash, bulk o'chirish, progressive disclosure forma, autosave draft, aqlli defaultlar (oxirgi kategoriya, SKU avtogeneratsiya).
 - **Zaxira** — kirim / chiqim / inventarizatsiya (recount), audit-log (har bir harakat `moves` jadvalida, nom snapshot bilan).
-- **Sotuv (POS)** — tez savdo grid, savat, chegirma (% yoki summa), to'lov turi (naqd/karta/o'tkazma/nasiya), mijoz biriktirish, chek (PDF — chop etish), qaytarish (return) zaxirani qaytaradi va nasiya balansini to'g'irlaydi.
+- **Sotuv (POS)** — tez savdo grid, savat, chegirma (% yoki summa), to'lov turi (naqd/karta/o'tkazma/nasiya), mijoz biriktirish, chek (PDF — chop etish), **donalab/qismli qaytarish** (zaxira, tushum, foyda va nasiya qarzini qayta hisoblaydi).
 - **Mijozlar / yetkazib beruvchilar** — qarz balansi, tarix, daftarga o'tish.
 - **Qarzlar** — mijoz va yetkazib beruvchi bo'yicha yagona daftar: to'lovlar, bo'lib to'lash, izohlar, qoldiq tarixi.
 - **Hisobotlar** — 7/30/90 kun: tushum, foyda, marja, o'rtacha chek, ABC-tahlil, kam qolgan tovarlar, o'lik zaxira. CSV (Excel) eksport + chop etish (PDF).
@@ -144,6 +144,68 @@ paytida, `completeSale()` tranzaksiyasi ichida yoziladi — bekor qilinsa
 "bo'sh" kontakt qolmaydi. Avans maydoni darhol to'lanadigan qismni bildiradi;
 qolgani qarz sifatida yangi mijozga biriktiriladi.
 
+## Qismli (donalab) qaytarish — v4
+
+Chekni butunlay qaytarish shart emas: har bir satrdan **1..N dona** qaytarish mumkin.
+
+### Ma'lumot modeli
+
+| Maydon | Ma'nosi |
+|---|---|
+| `SaleItem.qty` | **sotilgan** miqdor — hech qachon o'zgarmaydi (audit asosi) |
+| `SaleItem.returnedQty` | shu satrdan jami qaytarilgan miqdor; qoldiq = `qty − returnedQty` |
+| `Sale.refundedAmount` / `refundedCost` | qaytarilgan summa va tannarx (tez hisobot uchun kesh) |
+| `Sale.status` | `done` → `partial` → `returned` (doim `saleStatus()` bilan qayta hisoblanadi) |
+| `returns` jadvali | har bir qaytarish amali — **o'zgarmas dalolatnoma**: satrlar, miqdor, summa, qarzga ta'siri, izoh, vaqt |
+
+`returns` yozuvlari hech qachon tahrirlanmaydi/o'chirilmaydi: "nima, qancha va qachon
+qaytarilgani" faqat shu yerdan olinadi. Har bir amal uchun `moves` ga `type: 'return'`
+zaxira harakati ham yoziladi.
+
+### Hisob-kitob qoidalari
+
+1. **Chegirma ulushi** — qaytarilgan summa chekdagi yakuniy nisbat bo'yicha hisoblanadi:
+   `refund = (total − allaqachon qaytarilgan) × satr ulushi`. 10% chegirmali chekdan
+   qaytarish ham 10% chegirmali summada bo'ladi, aks holda foyda buzilardi.
+2. **Tiyin yo'qolmaydi** — satrlar proporsional yaxlitlanadi, yaxlitlash qoldig'i eng katta
+   satrga qo'shiladi.
+3. **Nasiya** — faqat **to'lanmagan** qism qarzdan chiqariladi, qolgani naqd qaytariladi
+   (`settlement: 'cash' | 'debt'`). Qarz hech qachon manfiyga tushmaydi.
+4. **Hisobotlar** — `status` bo'yicha emas, **sof summa** bo'yicha hisoblanadi
+   (`src/shared/lib/salesStats.ts`). Ilgari `status === 'done'` filtri qismli qaytarilgan
+   chekni hisobotdan butunlay yo'qotardi — endi `total − refundedAmount` ishlatiladi.
+
+### Migratsiya (v3 → v4)
+
+- Barcha eski satrlarga `returnedQty: 0` qo'shiladi, `refundedAmount/refundedCost` = 0.
+- v3 da `status: 'returned'` bo'lgan cheklar uchun satrlar `returnedQty = qty` qilib
+  belgilanadi va bitta `migrated: true` dalolatnoma yaratiladi — eski qaytarishlar
+  tarixda ko'rinadi, hisobot esa o'zgarmaydi.
+- **Idempotent**: dalolatnomasi bor chekka hech narsa qo'shilmaydi; `repairDatabase()`
+  qayta ishga tushirilsa ham natija bir xil.
+
+### Modul xaritasi
+
+| Fayl | Vazifa |
+|---|---|
+| `src/db/returns.ts` | sof matematika: `remainingQty`, `saleStatus`, `planReturn`, `discountFactor` |
+| `src/db/actions.ts` | `returnItems(saleId, selection, note)` — atomar amal; `returnSale()` — "hammasi" qulayligi |
+| `src/features/sales/ReturnSheet.tsx` | mobil qaytarish oynasi: satr bo'yicha −/+ stepper, "Hammasi", izoh, yakuniy hisob |
+| `src/features/sales/ReceiptSheet.tsx` | chek detali: satr holati, sof summa/foyda, qaytarishlar tarixi |
+| `src/shared/lib/salesStats.ts` | hisobot uchun sof ko'rsatkichlar (`saleNetTotal`, `itemStats`, …) |
+| `scripts/returns-check.mts` | 56 ta tekshiruv (56 assertions) |
+
+### UX qoidalari (mobil)
+
+- Har bir satr — alohida karta: `−` / miqdor maydoni / `+` / `Hammasi`. Tugmalar 40px.
+- `+` tugmasi qoldiqda **o'chadi**, kiritilgan qiymat avtomatik `clamp` qilinadi —
+  qoldiqdan ko'p qaytarish imkonsiz.
+- To'liq qaytarilgan satr xira ko'rinadi va `✓` bilan belgilanadi (qayta tanlanmaydi).
+- Tasodifiy to'liq qaytarishning oldini olish: yakuniy panelda summa, qarzdan kamayishi
+  va "chekda qoladi" ko'rsatiladi; tasdiqlashdan oldin tanlov ko'rinib turadi.
+- Qaytarishdan keyin chek yangilanadi (qayta ochiladi), foydalanuvchi qolgan donalarni
+  darhol qaytarishi mumkin.
+
 ## Mobil savat (POS) layouti
 
 ```
@@ -159,6 +221,6 @@ tugma doim ko'rinadi. `overscroll-behavior: contain` orqa fon "sakrashini" to'xt
 
 ## Keyingi bosqich uchun yo'nalishlar
 
-- `db.version(4)` — masalan, `sales.items` uchun alohida jadval (juda katta bazalar uchun)
+- `db.version(5)` — masalan, `sales.items` uchun alohida jadval (juda katta bazalar uchun)
 - TanStack Virtual (juda katta ro'yxatlar), exceljs/pdfmake kutubxonalari
 - Swipe amallar va pull-to-refresh kengaytmalari

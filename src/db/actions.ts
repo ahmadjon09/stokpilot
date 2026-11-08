@@ -1,8 +1,9 @@
 import {
   db, uid, addLog, type Customer, type LedgerDirection, type LedgerEntry, type LedgerSource,
-  type MoveType, type PayType, type Product, type Sale, type SaleItem,
+  type MoveType, type PayType, type Product, type ReturnLine, type ReturnRec, type Sale, type SaleItem,
 } from './db';
 import { buildLedgerEntry, ledgerDelta } from './ledger';
+import { planReturn, returnedTotals, discountFactor, saleStatus, type ReturnSelection } from './returns';
 import { round2 } from '../shared/lib/format';
 
 /** Zaxira harakati: in(+) / out(-) / recount(mutlaq qiymat) */
@@ -196,6 +197,7 @@ export async function completeSale(input: CheckoutInput): Promise<Sale> {
       const items: SaleItem[] = input.items.map(({ product, qty }) => ({
         productId: product.id, name: product.name, unit: product.unit,
         price: product.price, cost: product.cost, qty,
+        returnedQty: 0, // yangi chek — hech narsa qaytarilmagan
       }));
       const subtotal = round2(items.reduce((s, i) => s + i.price * i.qty, 0));
       const costTotal = round2(items.reduce((s, i) => s + i.cost * i.qty, 0));
@@ -252,7 +254,8 @@ export async function completeSale(input: CheckoutInput): Promise<Sale> {
         total, costTotal, payType: input.payType,
         paidAmount, debtAmount,
         customerId: party?.id ?? '', customerName: party?.name ?? '',
-        status: 'done', note: input.note, createdAt: now,
+        status: 'done', refundedAmount: 0, refundedCost: 0,
+        note: input.note, createdAt: now,
       };
       await db.sales.add(sale);
 
@@ -280,48 +283,167 @@ export async function completeSale(input: CheckoutInput): Promise<Sale> {
   );
 }
 
-export async function returnSale(saleId: string): Promise<void> {
-  await db.transaction(
+export interface ReturnInput {
+  saleId: string;
+  /** `Sale.items` indeksi → qaytariladigan miqdor (0 — o'tkazib yuboriladi) */
+  selection: ReturnSelection;
+  note?: string;
+}
+
+/**
+ * Qismli (donalab) qaytarish — yagona kirish nuqtasi.
+ *
+ * BITTA tranzaksiyada bajariladi:
+ *  1) zaxira qaytariladi (`products.stock += qty`) va audit-harakat yoziladi;
+ *  2) chek satrlarida `returnedQty` yig'iladi, `refundedAmount/refundedCost`
+ *     yangilanadi, `status` qayta hisoblanadi ('done' → 'partial' → 'returned');
+ *  3) nasiya bo'lsa — mijoz qarzi faqat TO'LANMAGAN qism doirasida kamayadi
+ *     (avans puli qarz emas, u naqd qaytariladi);
+ *  4) `returns` jadvaliga o'zgarmas dalolatnoma yoziladi (kim/nima/qancha/qachon).
+ *
+ * Xato bo'lsa hech narsa yozilmaydi (tranzaksiya bekor qilinadi).
+ */
+export async function returnItems(input: ReturnInput): Promise<ReturnRec> {
+  const { saleId, selection, note = '' } = input;
+
+  return db.transaction(
     'rw',
-    [db.products, db.moves, db.sales, db.customers, db.ledger, db.logs],
+    [db.products, db.moves, db.sales, db.customers, db.ledger, db.returns, db.logs],
     async () => {
       const sale = await db.sales.get(saleId);
-      if (!sale || sale.status === 'returned') return;
+      if (!sale) throw new Error('sale_not_found');
+
+      // Reja `planReturn` da tuziladi — UI ko'rgan raqamlar bilan bir xil
+      const plan = planReturn(sale, selection);
+      if (plan.errors.length > 0) throw new Error(plan.errors[0]);
+      if (plan.lines.length === 0) throw new Error('sales.returnErrEmpty');
+
       const now = Date.now();
-      for (const it of sale.items) {
-        const p = await db.products.get(it.productId);
-        if (p) await db.products.update(it.productId, { stock: round2(p.stock + it.qty), updatedAt: now });
+
+      /* --- 1) Zaxira va audit-harakat -------------------------------- */
+      for (const line of plan.lines) {
+        const p = await db.products.get(line.productId);
+        // Mahsulot o'chirilgan bo'lsa ham qaytarish to'xtamaydi: chek va
+        // moliyaviy hisob muhimroq, zaxira esa mavjud bo'lsa tiklanadi.
+        if (p) {
+          await db.products.update(line.productId, {
+            stock: round2(p.stock + line.qty),
+            updatedAt: now,
+          });
+        }
         await db.moves.add({
-          id: uid(), productId: it.productId, productName: it.name,
-          type: 'return', qty: it.qty, note: `Qaytarish #${sale.number}`, createdAt: now, refId: sale.id,
+          id: uid(),
+          productId: line.productId,
+          productName: line.name,
+          type: 'return',
+          qty: line.qty,
+          note: `Qaytarish #${sale.number}${note ? ': ' + note : ''}`,
+          createdAt: now,
+          refId: sale.id,
         });
       }
 
-      /*
-       * Nasiya qaytarilsa — faqat HALI TO'LANMAGAN qism qarzdan chiqariladi.
-       * Mijoz avans to'lagan bo'lsa, o'sha pul qaytarilishi kerak, lekin u
-       * qarz emas — shuning uchun faqat `debtAmount` (yoki legacy uchun total)
-       * teskari yoziladi. Balans manfiyga tushib ketmaydi.
-       */
+      /* --- 2) Chek satrlari va holati -------------------------------- */
+      const items: SaleItem[] = sale.items.map((it, i) => {
+        const back = plan.lines.find((l) => l.index === i)?.qty ?? 0;
+        if (back <= 0) return it;
+        return { ...it, returnedQty: round2(Math.min(it.qty, (it.returnedQty ?? 0) + back)) };
+      });
+
+      const totals = returnedTotals(items, discountFactor(sale));
+      const status = saleStatus({ items });
+
+      const nextSale: Sale = {
+        ...sale,
+        items,
+        status,
+        refundedAmount: totals.amount,
+        refundedCost: totals.cost,
+      };
+      await db.sales.put(nextSale);
+
+      /* --- 3) Nasiya qarzini kamaytirish ----------------------------- */
+      let debtReduced = 0;
       if (sale.payType === 'debt' && sale.customerId) {
         const party = await db.customers.get(sale.customerId);
         if (party) {
-          const outstanding = round2(Math.abs(sale.debtAmount ?? sale.total));
+          /*
+           * Faqat hali to'lanmagan qism qarzdan chiqariladi:
+           *   debtReduced = min(reja summasi, mijozning joriy qarzi)
+           * `planReturn` avans ulushini allaqachon ayirib bergan, lekin
+           * mijoz boshqa cheklar bo'yicha ham qarzdor bo'lishi mumkin —
+           * shu sababli joriy balans bilan ham cheklaymiz.
+           */
           const currentDebt = round2(Math.max(0, party.balance));
-          const undo = round2(Math.min(outstanding, currentDebt));
+          const undo = round2(Math.min(plan.debtReduced, currentDebt));
           if (undo > 0) {
             await applyPartyEntry({
-              party, direction: 'payment', amount: undo, source: 'return',
-              note: `Chek #${sale.number} qaytarildi`, saleId: sale.id, saleNumber: sale.number, at: now,
+              party,
+              direction: 'payment',
+              amount: undo,
+              source: 'return',
+              note: note || `Chek #${sale.number} — qismli qaytarish`,
+              saleId: sale.id,
+              saleNumber: sale.number,
+              at: now,
             });
+            debtReduced = undo;
           }
         }
       }
 
-      await db.sales.update(saleId, { status: 'returned' });
-      await addLog('return', `Qaytarish #${sale.number}`);
+      /* --- 4) Dalolatnoma (immutable audit trail) -------------------- */
+      const lines: ReturnLine[] = plan.lines.map((l) => ({
+        index: l.index,
+        productId: l.productId,
+        name: l.name,
+        unit: l.unit,
+        price: l.price,
+        cost: l.cost,
+        qty: l.qty,
+        refund: l.refund,
+      }));
+
+      const rec: ReturnRec = {
+        id: uid(),
+        saleId: sale.id,
+        saleNumber: sale.number,
+        lines,
+        amount: plan.amount,
+        cost: plan.cost,
+        debtReduced,
+        settlement: debtReduced > 0 ? 'debt' : 'cash',
+        note: note.trim(),
+        createdAt: now,
+      };
+      await db.returns.add(rec);
+
+      await addLog(
+        'return',
+        `Qaytarish #${sale.number}: ${plan.lines.length} satr, ${plan.amount}`,
+      );
+
+      return rec;
     },
   );
+}
+
+/**
+ * Butun chekni qaytarish — "hammasini qaytarish" tugmasi uchun qulaylik.
+ * Texnik jihatdan `returnItems` bilan bir xil yo'l (bitta dalolatnoma).
+ */
+export async function returnSale(saleId: string, note = ''): Promise<ReturnRec> {
+  const sale = await db.sales.get(saleId);
+  if (!sale) throw new Error('sale_not_found');
+
+  const selection: ReturnSelection = {};
+  sale.items.forEach((it, index) => {
+    // `planReturn` qoldiqni o'zi tekshiradi — bu yerda faqat qoldiqni beramiz
+    const remaining = round2(Math.max(0, it.qty - (it.returnedQty ?? 0)));
+    if (remaining > 0) selection[index] = remaining;
+  });
+
+  return returnItems({ saleId, selection, note });
 }
 
 /* ---------------------------------------------------------------------- */
