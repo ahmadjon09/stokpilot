@@ -31,7 +31,7 @@ function move<T>(arr: T[], i: number, dir: -1 | 1): T[] {
   return out;
 }
 
-const ALL_NAV: NavKey[] = ['dashboard', 'products', 'sales', 'stock', 'customers', 'reports', 'settings'];
+const ALL_NAV: NavKey[] = ['dashboard', 'products', 'sales', 'stock', 'customers', 'debts', 'reports', 'settings'];
 const ALL_WIDGETS: { key: WidgetKey; labelKey: string }[] = [
   { key: 'kpis', labelKey: 'nav.dashboard' },
   { key: 'trend', labelKey: 'dash.salesTrend' },

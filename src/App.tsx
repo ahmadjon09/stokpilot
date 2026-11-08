@@ -11,6 +11,8 @@ import ReceiptSheet from './features/sales/ReceiptSheet';
 import SalesHistorySheet from './features/sales/HistorySheet';
 import CustomersPage from './features/customers/CustomersPage';
 import CustomerFormSheet from './features/customers/CustomerForm';
+import DebtsPage from './features/debts/DebtsPage';
+import PartySheet from './features/debts/PartySheet';
 import ReportsPage from './features/reports/ReportsPage';
 import SettingsPage from './features/settings/SettingsPage';
 import StorageSheet from './features/settings/StorageSheet';
@@ -76,6 +78,7 @@ export default function App() {
           <Route path="stock" element={<StockPage />} />
           <Route path="sales" element={<PosPage />} />
           <Route path="customers" element={<CustomersPage />} />
+          <Route path="debts" element={<DebtsPage />} />
           <Route path="reports" element={<ReportsPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -89,6 +92,7 @@ export default function App() {
           <Route path="stock/new" element={<MoveFormSheet />} />
           <Route path="customers/new" element={<CustomerFormSheet />} />
           <Route path="customers/:id/edit" element={<CustomerFormSheet />} />
+          <Route path="debts/:id" element={<PartySheet />} />
           <Route path="sales/receipt/:id" element={<ReceiptSheet />} />
           <Route path="sales/history" element={<SalesHistorySheet />} />
           <Route path="settings/storage" element={<StorageSheet />} />

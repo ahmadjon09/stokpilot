@@ -8,6 +8,9 @@ import {
 import { useTranslation } from 'react-i18next';
 import { db } from '../../db/db';
 import { compactNum, formatMoney, monthShort, startOfDay } from '../../shared/lib/format';
+import {
+  countableSales, itemStats, saleNetTotal, sumNetProfit, sumNetRevenue,
+} from '../../shared/lib/salesStats';
 import { useSettings } from '../../store/settings';
 import { useAccentColors } from '../../shared/lib/theme';
 
@@ -54,10 +57,11 @@ export default function DashboardPage() {
 
   const data = useMemo(() => {
     const today = startOfDay(Date.now());
-    const done = sales.filter((s) => s.status === 'done');
+    // Qaytarishlar hisobga olinadi: sof summa bo'yicha (qismli ham qoladi)
+    const done = countableSales(sales);
     const todaySales = done.filter((s) => s.createdAt >= today);
-    const revenueToday = todaySales.reduce((s, x) => s + x.total, 0);
-    const profitToday = todaySales.reduce((s, x) => s + (x.total - x.costTotal), 0);
+    const revenueToday = sumNetRevenue(todaySales);
+    const profitToday = sumNetProfit(todaySales);
     const stockValue = products.reduce((s, p) => s + p.stock * p.cost, 0);
     const lowCount = products.filter((p) => p.stock <= p.minStock).length;
 
@@ -65,18 +69,19 @@ export default function DashboardPage() {
     const trend: { label: string; sum: number }[] = [];
     for (let d = 13; d >= 0; d--) {
       const dayStart = startOfDay(Date.now()) - d * DAY;
-      const sum = done.filter((s) => s.createdAt >= dayStart && s.createdAt < dayStart + DAY).reduce((s, x) => s + x.total, 0);
+      const sum = done
+        .filter((s) => s.createdAt >= dayStart && s.createdAt < dayStart + DAY)
+        .reduce((s, x) => s + saleNetTotal(x), 0);
       trend.push({ label: monthShort(dayStart), sum });
     }
 
     // Kategoriya taqsimoti (30 kun)
+    // Kategoriya taqsimoti — sof miqdorlar bo'yicha (qaytarish ayirilgan)
     const prodCat = new Map(products.map((p) => [p.id, p.categoryId]));
     const catSum = new Map<string, number>();
-    for (const s of done) {
-      for (const it of s.items) {
-        const cat = prodCat.get(it.productId) ?? '?';
-        catSum.set(cat, (catSum.get(cat) ?? 0) + it.price * it.qty);
-      }
+    for (const [pid, st] of itemStats(done)) {
+      const cat = prodCat.get(pid) ?? '?';
+      catSum.set(cat, (catSum.get(cat) ?? 0) + st.revenue);
     }
     const catName = new Map(categories.map((x) => [x.id, x.name]));
     const pie = [...catSum.entries()]
@@ -84,16 +89,10 @@ export default function DashboardPage() {
       .sort((a, b) => b.value - a.value);
 
     // Top-10 mahsulot (30 kun tushum)
-    const prodSum = new Map<string, { name: string; sum: number }>();
-    for (const s of done) {
-      for (const it of s.items) {
-        const cur = prodSum.get(it.productId) ?? { name: it.name, sum: 0 };
-        cur.sum += it.price * it.qty;
-        prodSum.set(it.productId, cur);
-      }
-    }
-    const top = [...prodSum.values()].sort((a, b) => b.sum - a.sum).slice(0, 10)
-      .map((x) => ({ name: x.name.length > 14 ? x.name.slice(0, 13) + '…' : x.name, sum: Math.round(x.sum) }));
+    // Top-10 mahsulot — sof tushum bo'yicha
+    const prodSum = itemStats(done);
+    const top = [...prodSum.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 10)
+      .map((x) => ({ name: x.name.length > 14 ? x.name.slice(0, 13) + '…' : x.name, sum: Math.round(x.revenue) }));
 
     // Zaxira harakati (14 kun)
     const flow: { label: string; inQty: number; outQty: number }[] = [];

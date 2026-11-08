@@ -12,6 +12,7 @@ export const SHEET_ROUTES = [
   '/stock/new',
   '/customers/new',
   '/customers/:id/edit',
+  '/debts/:id',
   '/sales/receipt/:id',
   '/sales/history',
   '/settings/storage',
@@ -33,6 +34,7 @@ export function baseRouteFor(pathname: string): string {
   if (pathname.startsWith('/stock')) return '/stock';
   if (pathname.startsWith('/sales')) return '/sales';
   if (pathname.startsWith('/customers')) return '/customers';
+  if (pathname.startsWith('/debts')) return '/debts';
   if (pathname.startsWith('/settings')) return '/settings';
   if (pathname.startsWith('/reports')) return '/reports';
   return '/';

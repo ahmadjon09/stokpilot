@@ -2,7 +2,14 @@ import { db, uid, DB_VERSION, type Snapshot } from '../../db/db';
 import { normalizeDatabase } from '../../db/migrations';
 import { downloadBlob } from './misc';
 
-const TABLES = ['products', 'categories', 'images', 'moves', 'sales', 'customers', 'logs'] as const;
+/**
+ * Zaxiraga kiradigan jadvallar.
+ * `returns` — qaytarish dalolatnomalari (audit trail), ularsiz tiklangan baza
+ * qaytarilgan tovarlarni "sotilgan" deb hisoblab qo'yardi.
+ */
+const TABLES = [
+  'products', 'categories', 'images', 'moves', 'sales', 'customers', 'ledger', 'returns', 'logs',
+] as const;
 type TableName = (typeof TABLES)[number];
 
 export interface BackupFile {
@@ -55,7 +62,7 @@ export function isValidBackup(obj: unknown): obj is BackupFile {
 export async function restoreBackup(data: BackupFile): Promise<void> {
   await db.transaction(
     'rw',
-    [db.products, db.categories, db.images, db.moves, db.sales, db.customers, db.logs],
+    [db.products, db.categories, db.images, db.moves, db.sales, db.customers, db.ledger, db.returns, db.logs],
     async (tx) => {
       for (const t of TABLES) {
         await tx.table(t).clear();
