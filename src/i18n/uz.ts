@@ -295,6 +295,8 @@ const uz: Record<string, string> = {
 
   // ── Navigatsiya / qarzlar standarti (v5) ───────────────────────────────
   'nav.stats': 'Statistika',
+  'nav.allSections': "Barcha bo'limlar",
+  'nav.mainNav': 'Asosiy navigatsiya',
   'nav.expand': 'Panelni kengaytirish',
   'nav.collapse': 'Panelni yig\'ish',
 
@@ -358,7 +360,7 @@ const uz: Record<string, string> = {
   'stats.noBase': 'baza yo\'q',
 
   // ── Sozlamalar: ikki panel ─────────────────────────────────────────────
-  'settings.navDualHint': 'Tanlangan bo\'limlar pastki panelga tushadi (telefonda) va sidebar tepasida turadi. Qolgan barcha bo\'limlar sidebar\'da saqlanadi — hech narsa yo\'qolmaydi.',
+  'settings.navDualHint': 'Tanlangan bo\'limlar pastki panelga tushadi. Telefonda ham, kompyuterda ham to\'liq ro\'yxat mavjud: telefonda chap yuqoridagi ☰ tugmasi barcha bo\'limlarni ochadi, kompyuterda esa doimiy sidebar. Hech narsa yo\'qolmaydi.',
   'settings.navOrderHint': 'Tartibni o\'q bilan o\'zgartiring — pastki panel ham shu tartibda bo\'ladi.',
   'settings.sidebarOnly': 'faqat sidebar',
 

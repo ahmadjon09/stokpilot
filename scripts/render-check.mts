@@ -25,6 +25,7 @@ const CustomersPage = (await import('../src/features/customers/CustomersPage.tsx
 const ReturnSheet = (await import('../src/features/sales/ReturnSheet.tsx')).default;
 const StatisticsPage = (await import('../src/features/reports/StatisticsPage.tsx')).default;
 const SupplierPicker = (await import('../src/features/customers/SupplierPicker.tsx')).default;
+const AppShell = (await import('../src/layouts/AppShell.tsx')).default;
 
 const customer = {
   id: 'c1', name: 'Ali Valiyev', phone: '+998901112233', kind: 'customer' as const,
@@ -73,6 +74,7 @@ const cases: [string, React.ReactElement, string][] = [
     sale: { ...returnSale, status: 'returned', items: returnSale.items.map((i) => ({ ...i, returnedQty: i.qty })) } as any,
     onClose() {},
   }), '/sales'],
+  ['AppShell (layout + nav)', React.createElement(AppShell), '/'],
   ['StatisticsPage', React.createElement(StatisticsPage), '/stats'],
   ['SupplierPicker', React.createElement(SupplierPicker, { value: '', onChange(){} }), '/products'],
   ['SupplierPicker (tanlangan)', React.createElement(SupplierPicker, { value: 'c1', onChange(){} }), '/products'],

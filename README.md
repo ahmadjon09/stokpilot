@@ -276,11 +276,23 @@ resolveBottomNav(nav)  → 3..5 element (mobil pastki panel), zaxira bilan to'ld
 resolveSidebarNav(nav) → BARCHA 9 bo'lim, tanlanganlar yuqorida
 ```
 
-- **Pastki panel** sozlamalardan boshqariladi, maksimum 5 ta.
-- **Sidebar** hech qachon elementni yashirmaydi — sozlamalarda o'chirilgan
-  bo'lim ham u yerdan ochiladi. Shu tufayli "tugmalarim yo'qoldi" holati
-  bo'lmaydi.
-- Sidebar yig'iladi (`localStorage`, 240px ↔ 76px) — planshetda joy tejaydi.
+**Telefonda ikkala panel ham ishlaydi** (avval faqat pastki panel bor edi):
+
+| Qurilma | Pastki panel (`.bnav`) | Sidebar |
+|---|---|---|
+| Telefon (< 768px) | doim ko'rinadi — sozlamalardan boshqariladi | **drawer**: chap yuqoridagi ☰ tugmasidan ochiladi |
+| Planshet / desktop | yo'q | doimiy, yig'iladigan (240px ↔ 76px) |
+
+- **Pastki panel** — maksimum 5 element, tez o'tish uchun.
+- **Drawer / sidebar** — barcha bo'limlar. Sozlamalarda "o'chirilgan" bo'lim
+  ham shu yerdan ochiladi, shuning uchun hech qachon "tugmalarim yo'qoldi"
+  holati bo'lmaydi.
+- Pastki panelda ham bor elementlar sidebar'da kichik nuqta bilan belgilanadi.
+- Drawer: `z-index: 56` — pastki panel (50) va FAB (40) ustida, lekin sheet
+  (60/61) va dialog (80) ostida. Shuning uchun u ochiq turganda chek/modal
+  to'g'ri ustki qatlamda ochiladi.
+- Drawer ochilganda `body` scroll qotiriladi, ro'yxat esa o'zi scroll qiladi.
+- Sahifa almashganda, backdrop bosilganda yoki `Escape` da avtomatik yopiladi.
 - Sozlamalarda hammasi o'chirilsa, `resolveBottomNav([])` zaxira ro'yxatini
   qaytaradi va panel ishlashda davom etadi.
 

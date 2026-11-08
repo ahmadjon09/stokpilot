@@ -233,6 +233,43 @@ h1, h2, h3, p, span, li, td, th, label { overflow-wrap: anywhere; }
 .bnav-item svg { transition: transform 150ms ease; }
 .bnav-item.bnav-on svg { transform: translateY(-1px); }
 
+/* ---------- Mobil drawer (to'liq sidebar) ---------- */
+/*
+ * Mobil qurilmada ikkala navigatsiya ham ishlaydi:
+ *   • pastki panel (.bnav)  — tez o'tish uchun, sozlamalardan boshqariladi
+ *   • drawer (.drawer)      — BARCHA bo'limlar, hamburger tugmasidan ochiladi
+ *
+ * Muhim: drawer z-index 56 — pastki panel (50) va FAB (40) ustida, lekin
+ * sheet (60/61) va dialog (80) OSTIDA turadi. Shu tufayli drawer ochiq
+ * turganda chek yoki modal ochilsa, u to'g'ri ustki qatlamda ko'rinadi.
+ * Ro'yxat o'zi scroll qiladi, sahifa esa `overflow: hidden` bilan qotiriladi
+ * (JS tomonda), shuning uchun orqa fon "sakramaydi".
+ */
+.drawer-backdrop {
+  position: fixed; inset: 0; z-index: 55;
+  background: rgb(0 0 0 / 0.45);
+  animation: spFadeIn 160ms ease;
+}
+.drawer {
+  /*
+   * z-index 56 — pastki panel (50) va FAB (40) ustida, lekin SHEET (60/61)
+   * ostida: drawer ochiq turganda chek/modal ochilsa, u drawer ustida
+   * ko'rinishi kerak (aks holda foydalanuvchi formani ko'rmay qoladi).
+   */
+  position: fixed; inset-block: 0; left: 0; z-index: 56;
+  display: flex; flex-direction: column;
+  width: min(82vw, 300px);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  box-shadow: 8px 0 28px rgb(0 0 0 / 0.18);
+  animation: spDrawerIn 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  overscroll-behavior: contain;
+}
+@keyframes spDrawerIn {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
 /* toast */
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 90; background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 999px; font-size: 0.875rem; font-weight: 600; box-shadow: 0 8px 24px rgb(0 0 0 / 0.25); animation: spSlideUp 200ms ease; max-width: calc(100vw - 40px); text-align: center; line-height: 1.35; }
 @media (min-width: 768px) { .toast { bottom: 28px; } }
