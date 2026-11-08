@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { db, uid, type Customer } from '../../db/db';
 import { formatDateTime, formatMoney } from '../../shared/lib/format';
 import { buzz, toast } from '../../shared/lib/misc';
+import { useCloseSheet } from '../../shared/lib/nav';
 import Sheet from '../../shared/ui/Sheet';
 import NumberInput from '../../shared/ui/NumberInput';
 import { ConfirmDialog, Field, Segmented } from '../../shared/ui/bits';
@@ -14,10 +15,8 @@ export default function CustomerFormSheet() {
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
   const { t } = useTranslation();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const hasBackground = Boolean((location.state as { background?: unknown } | null)?.background);
-  const close = () => { if (hasBackground) navigate(-1); else navigate('/customers'); };
+  // yagona yopish mantiqi: orqada sahifa bo'lsa — tarixda orqaga, aks holda fallback
+  const close = useCloseSheet('/customers');
 
   const existing = useLiveQuery(async () => (id ? db.customers.get(id) : undefined), [id]);
   const salesHistory = useLiveQuery(

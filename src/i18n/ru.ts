@@ -161,6 +161,14 @@ const ru: Record<string, string> = {
   'sales.emptyHistory': 'Продаж пока нет',
   'sales.vatIncluded': 'в т.ч. НДС',
   'sales.paySuccess': 'Оплата принята',
+  'sales.receiptNotFound': 'Чек не найден',
+  'sales.receiptNotFoundHint': 'Возможно, чек удалён или данные были обновлены.',
+  'sales.searchHistoryPh': 'Номер чека, клиент или товар…',
+  'sales.onlyActive': 'Без возвратов',
+  'sales.nothingFound': 'Ничего не найдено',
+  'sales.nothingFoundHint': 'Попробуйте изменить поисковый запрос.',
+  'sales.costTotal': 'Себестоимость (итого)',
+  'sales.returnedHint': 'Продажа возвращена — товары вернулись на склад.',
 
   'customers.title': 'Клиенты и поставщики',
   'customers.new': 'Новый контакт',
@@ -283,6 +291,18 @@ const ru: Record<string, string> = {
   'backup.restoreConfirm': 'Восстановить снапшот? Текущие данные будут заменены.',
   'backup.restored': 'Снапшот восстановлен',
   'backup.noSnapshots': 'Снапшотов пока нет',
+
+  // ── Состояния базы / миграции ─────────────────────────────────────────
+  'db.repaired': 'Данные адаптированы к новой версии — все записи сохранены',
+  'db.reseeded': 'База пересоздана, старые записи восстановлены по возможности',
+  'db.blocked': 'Не удалось открыть базу — обновите или перезапустите приложение',
+  'db.blockedTitle': 'База данных занята',
+  'db.blockedText': 'Открыть базу не удалось. Если StokPilot открыт в другой вкладке — закройте её и попробуйте снова. Ваши данные не удалены.',
+  'db.noDataLost': 'Данные не удалены',
+  'db.repairNow': 'Проверить данные',
+  'db.repairDone': 'записей исправлено',
+  'db.repairOk': 'Все записи корректны',
+  'db.repairFailed': 'Ошибка при проверке',
 
   'empty.default': 'Здесь пока пусто',
 };

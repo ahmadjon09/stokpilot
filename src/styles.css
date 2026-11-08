@@ -153,8 +153,22 @@ h1, h2, h3, p, span, li, td, th, label { overflow-wrap: anywhere; }
 .sheet-handle { width: 40px; height: 4px; border-radius: 999px; background: var(--border); margin: 0 auto; }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px 6px; }
 .sheet-title { font-size: 1.0625rem; font-weight: 800; letter-spacing: -0.01em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sheet-body { overflow-y: auto; overscroll-behavior: contain; padding: 8px 16px 16px; flex: 1; min-height: 0; }
-.sheet-foot { border-top: 1px solid var(--border); padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px; background: var(--surface); }
+/* Kontent zonasi — FAQAT shu qism scroll bo'ladi (head/foot doim ko'rinadi) */
+.sheet-body {
+  overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px 16px 16px; flex: 1 1 auto; min-height: 0;
+}
+/* Amallar paneli — flex konteynerdan tashqarida emas, lekin `flex: none` bilan
+   hech qachon siqilib ketmaydi. Mobil'da safe-area hisobga olinadi. */
+.sheet-foot {
+  border-top: 1px solid var(--border); padding: 12px 16px;
+  display: flex; flex-wrap: wrap; gap: 10px; background: var(--surface);
+  flex: none; box-shadow: 0 -1px 0 var(--border);
+}
+@media (max-width: 767px) {
+  .sheet-foot { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+}
 .sheet-foot .btn { flex: 1 1 120px; min-width: 0; }
 .sheet-foot .btn-ghost[style] { flex: 0 0 auto; }
 
@@ -214,6 +228,82 @@ h1, h2, h3, p, span, li, td, th, label { overflow-wrap: anywhere; }
 
 .scroll-x { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
 .scroll-x::-webkit-scrollbar { display: none; }
+
+/* ---------- POS savat paneli (mobil scroll muammosi yechimi) ---------- */
+/*
+ * Tuzilma:
+ *   .cart-panel  → flex column, balandligi `dvh` bilan CHEKLANGAN, overflow hidden
+ *     ├─ .cart-panel-head → flex: none   (ochish/yig'ish sarlavhasi)
+ *     ├─ .cart-body       → flex: 1 1 auto; min-height: 0; overflow-y: auto
+ *     │     └─ qatorlar + chegirma/to'lov/jami (faqat shu qism scroll bo'ladi)
+ *     └─ .cart-foot       → flex: none   (JAMI + "To'lovni yakunlash")
+ *
+ * Nega aynan shunday:
+ *  1. `min-height: 0` — flex bolasi o'z ichida scroll bo'lishi uchun SHART.
+ *     Usiz kontent panelni cheksiz cho'zadi va tugmalar ekrandan chiqib ketadi
+ *     (foydalanuvchi shikoyat qilgan asosiy xato).
+ *  2. Amallar paneli scroll konteyneridan TASHQARIDA → ro'yxat qanchalik uzun
+ *     bo'lsa ham hech qachon kontent ostida qolmaydi/ustiga tushmaydi.
+ *  3. Balandlik `%` emas, aniq `calc(100dvh - …)` bilan beriladi: ota-element
+ *     balandligi "auto" bo'lsa, `max-height: 100%` brauzerda hal qilinmaydi va
+ *     panel viewport'dan chiqib ketadi. `dvh` mobil manzil satrini hisobga oladi.
+ *  4. `overscroll-behavior: contain` — ro'yxat tugaganda orqadagi mahsulot
+ *     gridi "sakrab" ketmaydi (mobil WebView'da sezilarli noqulaylik edi).
+ */
+.cart-panel {
+  display: flex; flex-direction: column;
+  min-height: 0; overflow: hidden;
+  /* Desktop/planshet: sticky ustunning balandligi */
+  max-height: calc(100dvh - 96px);
+  width: 100%;
+}
+.cart-panel-head { flex: none; }
+
+.cart-body {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.cart-body::-webkit-scrollbar { width: 4px; }
+.cart-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+
+.cart-lines { flex: none; }
+.cart-options { background: var(--surface); flex: none; }
+
+/* Yakuniy amallar paneli — hech qachon siqilmaydi, scroll'da qatnashmaydi */
+.cart-foot {
+  flex: none;
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 12px rgb(0 0 0 / 0.06);
+}
+.cart-foot .btn { min-height: 46px; flex: 1 1 auto; min-width: 0; }
+
+/* Desktop/planshet: o'ng ustun */
+.cart-desktop-wrap { display: flex; }
+
+/* Mobil: pastda suzuvchi dock — bottom nav (58px) + safe-area ustida.
+   Balandlik bottom-nav va yuqori header'ni hisobga olgan holda cheklanadi. */
+.cart-mobile-dock {
+  bottom: calc(62px + env(safe-area-inset-bottom));
+  display: block;
+}
+@media (max-width: 767px) {
+  .cart-mobile-dock .cart-panel {
+    max-height: calc(100dvh - 132px - env(safe-area-inset-bottom));
+  }
+  /* Savat ochiq bo'lsa, oxirgi mahsulotlar dock ostida qolmasin */
+  .cart-foot { padding-bottom: 12px; }
+}
+
+/* Kichik balandlikdagi qurilmalar (landshaft telefon) — yanada ixcham */
+@media (max-height: 520px) {
+  .cart-panel { max-height: calc(100dvh - 76px); }
+}
 
 /* receipts & print */
 .receipt { font-size: 0.84375rem; }

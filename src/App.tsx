@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Navigate, Route, Routes, matchPath, useLocation } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import AppShell from './layouts/AppShell';
 import DashboardPage from './features/dashboard/DashboardPage';
 import ProductsPage from './features/products/ProductsPage';
@@ -15,32 +15,8 @@ import ReportsPage from './features/reports/ReportsPage';
 import SettingsPage from './features/settings/SettingsPage';
 import StorageSheet from './features/settings/StorageSheet';
 import { applyAppearance, useSettings } from './store/settings';
+import { baseRouteFor, isSheetRoute, type SheetBackground } from './shared/lib/nav';
 import i18n from './i18n';
-
-const SHEET_ROUTES = [
-  '/products/new',
-  '/products/:id/edit',
-  '/stock/new',
-  '/customers/new',
-  '/customers/:id/edit',
-  '/sales/receipt/:id',
-  '/sales/history',
-  '/settings/storage',
-];
-
-function baseFor(path: string): string {
-  if (path.startsWith('/products')) return '/products';
-  if (path.startsWith('/stock')) return '/stock';
-  if (path.startsWith('/sales')) return '/sales';
-  if (path.startsWith('/customers')) return '/customers';
-  if (path.startsWith('/settings')) return '/settings';
-  if (path.startsWith('/reports')) return '/reports';
-  return '/';
-}
-
-interface SheetNavState {
-  background?: { pathname: string; search: string };
-}
 
 export default function App() {
   const location = useLocation();
@@ -68,13 +44,28 @@ export default function App() {
     return () => mq.removeEventListener('change', onChange);
   }, [theme, accent, radius, density, font]);
 
-  const state = location.state as SheetNavState | null;
+  const state = location.state as { background?: SheetBackground } | null;
   const bg = state?.background;
-  const isSheetPath = SHEET_ROUTES.some((p) => matchPath({ path: p, end: true }, location.pathname));
+  const sheetOpen = isSheetRoute(location.pathname);
 
-  // Sheet route ochiq bo'lsa, orqadagi asosiy sahifa ko'rsatiladi
-  const mainPathname = bg ? bg.pathname : isSheetPath ? baseFor(location.pathname) : location.pathname;
-  const mainSearch = bg ? bg.search ?? '' : location.search;
+  /**
+   * Orqadagi asosiy sahifa manzili.
+   *
+   * Regressiya (tuzatildi): ilgari `bg` bo'lmaganda faqat `location.search`
+   * olinardi, `bg` bo'lsa esa uning search'i olinardi — bu mantiq sheet
+   * ustiga sheet ochilganda (masalan Savat → Sotuvlar tarixi → Chek) buzilib,
+   * orqa fon `/` ga sakrab ketardi.
+   *
+   * Endi: `bg` faqat haqiqiy sahifa bo'lsagina ishlatiladi. Aks holda joriy
+   * path sheet bo'lsa — uning bo'lim sahifasi, bo'lmasa — joriy path.
+   */
+  const safeBg = bg && !isSheetRoute(bg.pathname) ? bg : null;
+  const mainPathname = safeBg
+    ? safeBg.pathname
+    : sheetOpen
+      ? baseRouteFor(location.pathname)
+      : location.pathname;
+  const mainSearch = safeBg ? safeBg.search ?? '' : location.search;
 
   return (
     <>
@@ -91,7 +82,7 @@ export default function App() {
         </Route>
       </Routes>
 
-      {isSheetPath && (
+      {sheetOpen && (
         <Routes location={{ pathname: location.pathname, search: location.search, hash: '', state: location.state, key: location.key }}>
           <Route path="products/new" element={<ProductFormSheet />} />
           <Route path="products/:id/edit" element={<ProductFormSheet />} />

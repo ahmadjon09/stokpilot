@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Brush, Eraser, HardDrive, Trash2 } from 'lucide-react';
+import { Brush, DatabaseZap, Eraser, HardDrive, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { db } from '../../db/db';
+import { db, repairDatabase } from '../../db/db';
 import { recompressDataUrl } from '../../shared/lib/img';
 import { formatDateTime } from '../../shared/lib/format';
 import { formatBytes } from '../../shared/ui/bits';
 import { buzz, toast } from '../../shared/lib/misc';
+import { useCloseSheet } from '../../shared/lib/nav';
 import Sheet from '../../shared/ui/Sheet';
 import { ConfirmDialog } from '../../shared/ui/bits';
 
@@ -27,16 +27,15 @@ const TABLE_LABELS: Record<string, string> = {
 
 export default function StorageSheet() {
   const { t } = useTranslation();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const hasBackground = Boolean((location.state as { background?: unknown } | null)?.background);
-  const close = () => { if (hasBackground) navigate(-1); else navigate('/settings'); };
+  // yagona yopish mantiqi: orqada sahifa bo'lsa — tarixda orqaga, aks holda fallback
+  const close = useCloseSheet('/settings');
 
   const [stats, setStats] = useState<TableStat[]>([]);
   const [estimate, setEstimate] = useState<{ usage: number; quota: number } | null>(null);
   const [topImages, setTopImages] = useState<{ id: string; thumb: string; size: number; name: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [confirmRecompress, setConfirmRecompress] = useState(false);
+  const [repairing, setRepairing] = useState(false);
   const [confirmWipe, setConfirmWipe] = useState(false);
 
   const measure = useCallback(async () => {
@@ -81,6 +80,26 @@ export default function StorageSheet() {
     toast(`${old.length} ${t('storage.logsCleared')}`);
     buzz(12);
     void measure();
+  };
+
+  /**
+   * Ma'lumotlarni qo'lda tekshirish/tiklash.
+   * Migratsiya avtomatik ishlaydi, lekin eski backup import qilingan yoki
+   * baza yarim yozilgan holatlarda foydalanuvchi o'zi ishga tushira oladi.
+   * Hech qanday yozuv o'chirilmaydi — faqat maydonlar to'g'rilanadi.
+   */
+  const repair = async () => {
+    setRepairing(true);
+    try {
+      const report = await repairDatabase();
+      toast(report.total > 0 ? `${report.total} ${t('db.repairDone')}` : t('db.repairOk'));
+      buzz(14);
+      void measure();
+    } catch {
+      toast(t('db.repairFailed'));
+    } finally {
+      setRepairing(false);
+    }
   };
 
   const recompress = async () => {
@@ -173,6 +192,9 @@ export default function StorageSheet() {
         </button>
         <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setConfirmRecompress(true)}>
           <Brush size={16} strokeWidth={1.5} /> {busy ? t('common.loading') : t('storage.recompress')}
+        </button>
+        <button type="button" className="btn btn-ghost" disabled={repairing} onClick={() => void repair()}>
+          <DatabaseZap size={16} strokeWidth={1.5} /> {repairing ? t('common.loading') : t('db.repairNow')}
         </button>
         <button type="button" className="btn btn-ghost" style={{ color: 'var(--bad)' }} onClick={() => setConfirmWipe(true)}>
           <Trash2 size={16} strokeWidth={1.5} /> {t('storage.wipe')}

@@ -8,18 +8,30 @@ interface SheetProps {
   children: ReactNode;
   footer?: ReactNode;
   wide?: boolean;
+  /** Sarlavha ostidagi qo'shimcha qator (masalan "to'liq ekran" tugmasi) */
+  headerExtra?: ReactNode;
 }
 
 /**
  * Modal/bottom sheet — alohida route sifatida render qilinadi.
  * Mobil: pastdan chiquvchi sheet (drag-to-dismiss). Planshet/desktop: markazlashgan dialog.
  * Back tugmasi bosilganda route pop bo'ladi → sheet yopiladi.
+ *
+ * Scroll izolyatsiyasi:
+ *  - `.sheet-panel` — `overflow: hidden` + flex column (head/body/foot);
+ *  - `.sheet-body`  — `flex: 1; min-height: 0; overflow-y: auto` — FAQAT shu
+ *    qism scroll bo'ladi, footer esa doim pastda ko'rinib turadi;
+ *  - `overscroll-behavior: contain` — scroll tugaganda orqadagi sahifa
+ *    "sakrab" ketmaydi (mobil brauzer/WebView'da muhim).
  */
-export default function Sheet({ title, onClose, children, footer, wide }: SheetProps) {
+export default function Sheet({ title, onClose, children, footer, wide, headerExtra }: SheetProps) {
   const { t } = useTranslation();
   const [drag, setDrag] = useState(0);
+  // Drag holati ref'da — har touchmove'da butun sheet (potensial uzun ro'yxat)
+  // qayta render bo'lmasligi uchun.
   const dragging = useRef(false);
   const startY = useRef(0);
+  const dragRef = useRef(0);
   const panelRef = useRef<HTMLDivElement>(null);
 
   // onClose har renderda yangi funksiya bo'lishi mumkin — ref orqali barqaror ushlaymiz,
@@ -30,14 +42,19 @@ export default function Sheet({ title, onClose, children, footer, wide }: SheetP
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRef.current(); };
     window.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
+    // Body scroll'ini qulflash — orqadagi sahifa sheet ostida siljib ketmasligi uchun.
+    // `position: fixed` ishlatilmaydi (iOS'da layout sakraydi); overflow + touch-action yetarli.
+    const prevOverflow = document.body.style.overflow;
+    const prevOverscroll = document.body.style.overscrollBehavior;
     document.body.style.overflow = 'hidden';
+    document.body.style.overscrollBehavior = 'contain';
     // Faqat ochilishda fokus — mavjud fokusni buzmaslik uchun
     const el = panelRef.current;
     if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
     return () => {
       window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
+      document.body.style.overflow = prevOverflow;
+      document.body.style.overscrollBehavior = prevOverscroll;
     };
   }, []);
 
@@ -55,18 +72,20 @@ export default function Sheet({ title, onClose, children, footer, wide }: SheetP
         onTouchStart={(e) => {
           const zone = (e.target as HTMLElement).closest('[data-drag-zone]');
           if (!zone) return;
-          dragging.current = true;
           startY.current = e.touches[0].clientY;
+          dragging.current = true;
         }}
         onTouchMove={(e) => {
           if (!dragging.current) return;
-          setDrag(Math.max(0, e.touches[0].clientY - startY.current));
+          const next = Math.max(0, e.touches[0].clientY - startY.current);
+          dragRef.current = next;
+          setDrag(next);
         }}
         onTouchEnd={() => {
           if (!dragging.current) return;
           dragging.current = false;
-          if (drag > 110) onClose();
-          else setDrag(0);
+          if (dragRef.current > 110) onClose();
+          else { dragRef.current = 0; setDrag(0); }
         }}
       >
         <div data-drag-zone className="sheet-drag md:hidden" aria-hidden="true">
@@ -78,6 +97,7 @@ export default function Sheet({ title, onClose, children, footer, wide }: SheetP
             <X size={20} strokeWidth={1.5} />
           </button>
         </div>
+        {headerExtra}
         <div className="sheet-body">{children}</div>
         {footer && <div className="sheet-foot">{footer}</div>}
       </div>
