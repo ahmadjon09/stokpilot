@@ -7,7 +7,9 @@ import { wipeAll } from '../../db/seed';
 import { exportAllToFile, isValidBackup, restoreBackup, restoreSnapshot } from '../../shared/lib/backup';
 import { formatDateTime } from '../../shared/lib/format';
 import { processImageFile } from '../../shared/lib/img';
-import { ACCENTS, useSettings, type NavKey, type WidgetKey } from '../../store/settings';
+import {
+  ALL_NAV_KEYS, BOTTOM_NAV_MAX, ACCENTS, useSettings, type NavKey, type WidgetKey,
+} from '../../store/settings';
 import { useOpenSheet } from '../../shared/lib/nav';
 import { buzz, toast } from '../../shared/lib/misc';
 import NumberInput from '../../shared/ui/NumberInput';
@@ -31,7 +33,7 @@ function move<T>(arr: T[], i: number, dir: -1 | 1): T[] {
   return out;
 }
 
-const ALL_NAV: NavKey[] = ['dashboard', 'products', 'sales', 'stock', 'customers', 'debts', 'reports', 'settings'];
+const ALL_NAV: NavKey[] = [...ALL_NAV_KEYS];
 const ALL_WIDGETS: { key: WidgetKey; labelKey: string }[] = [
   { key: 'kpis', labelKey: 'nav.dashboard' },
   { key: 'trend', labelKey: 'dash.salesTrend' },
@@ -81,13 +83,20 @@ export default function SettingsPage() {
     finally { if (logoRef.current) logoRef.current.value = ''; }
   };
 
+  /**
+   * Pastki panel elementlarini yoqish/o'chirish.
+   *
+   * MUHIM: bu yerda "kamida 3 ta" cheklovi YO'Q. Agar foydalanuvchi
+   * hammasini o'chirsa, `resolveBottomNav()` zaxira ro'yxati bilan panelni
+   * to'ldiradi — ya'ni UI hech qachon bo'sh qolmaydi va foydalanuvchi
+   * "tugmalarim yo'qoldi" holatiga tushmaydi.
+   */
   const toggleNav = (k: NavKey) => {
     buzz(6);
     if (s.nav.includes(k)) {
-      if (s.nav.length <= 3) { toast(t('settings.navMin')); return; }
       s.set({ nav: s.nav.filter((x) => x !== k) });
     } else {
-      if (s.nav.length >= 5) { toast(t('settings.navMax')); return; }
+      if (s.nav.length >= BOTTOM_NAV_MAX) { toast(t('settings.navMax')); return; }
       s.set({ nav: [...s.nav, k] });
     }
   };
@@ -186,6 +195,11 @@ export default function SettingsPage() {
       {/* Interfeys */}
       <Section title={t('settings.interface')}>
         <Field label={t('settings.navItems')} hint={t('settings.navHint')}>
+          {/* Ikki panel qanday ishlashi haqida qisqa tushuntirish */}
+          <div className="mb-2 rounded-lg px-3 py-2 text-[0.6875rem] leading-snug"
+            style={{ background: 'var(--accent-soft)', color: 'var(--text)' }}>
+            {t('settings.navDualHint')}
+          </div>
           <div className="card row-list overflow-hidden">
             {s.nav.map((k, i) => (
               <div key={k} className="flex items-center gap-2 px-3 py-1.5">
@@ -205,9 +219,13 @@ export default function SettingsPage() {
               <div key={k} className="flex items-center gap-2 px-3 py-1.5 opacity-70">
                 <input type="checkbox" className="h-5 w-5 accent-[var(--accent)]" checked={false} onChange={() => toggleNav(k)} aria-label={t(NAV_META[k].labelKey)} />
                 <span className="flex-1 text-[0.875rem]">{t(NAV_META[k].labelKey)}</span>
+                <span className="flex-none text-[0.5937rem] font-semibold uppercase tracking-wide text-mute">
+                  {t('settings.sidebarOnly')}
+                </span>
               </div>
             ))}
           </div>
+          <p className="mt-1.5 text-[0.6562rem] leading-snug text-mute">{t('settings.navOrderHint')}</p>
         </Field>
 
         <Field label={t('settings.widgets')} hint={t('settings.widgetsHint')}>

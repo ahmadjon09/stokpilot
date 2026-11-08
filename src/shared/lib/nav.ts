@@ -37,6 +37,7 @@ export function baseRouteFor(pathname: string): string {
   if (pathname.startsWith('/debts')) return '/debts';
   if (pathname.startsWith('/settings')) return '/settings';
   if (pathname.startsWith('/reports')) return '/reports';
+  if (pathname.startsWith('/stats')) return '/stats';
   return '/';
 }
 

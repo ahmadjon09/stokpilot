@@ -56,15 +56,22 @@ export default function LedgerTimeline({ entries, kind, onDelete }: LedgerTimeli
         const Icon = SOURCE_ICON[e.source] ?? Wallet;
         const method = e.method ? t('sales.pay.' + e.method) : '';
         /*
-         * "Qarz oshdi" har doim qizil, "kamaydi" yashil.
-         * Yetkazib beruvchida charge bizning qarzimizni oshiradi — shuning uchun
-         * rang `direction` bo'yicha emas, BALANS o'zgarishi bo'yicha aniqlanadi.
+         * Rang QARZLAR STANDARTI bo'yicha (src/shared/lib/debt.ts).
+         *
+         * Bu yozuv — HARAKAT, qoldiq emas. Shuning uchun rang "qaysi tomonga
+         * o'zgardi" degan ma'noni beradi:
+         *   • QARZ O'SDI  → o'sha qarz turining rangi
+         *       mijoz nasiyaga oldi        → qizil  (--debt-customer)
+         *       biz yetkazib beruvchidan oldik → zangor (--debt-supplier)
+         *   • QARZ KAMAYDI → yashil (--ok) — to'lov/qaytarish ijobiy harakat
+         *
+         * Ya'ni to'lov hech qachon ko'k bo'lib ko'rinmaydi (u qarz emas).
          */
-        const balanceUp = e.partyKind === 'supplier'
-          ? e.direction === 'payment'
-          : e.direction === 'charge';
-        const color = balanceUp ? 'var(--bad)' : 'var(--ok)';
-        const sign = balanceUp ? '+' : '−';
+        const increasesDebt = e.direction === 'charge';
+        const color = increasesDebt
+          ? (e.partyKind === 'supplier' ? 'var(--debt-supplier)' : 'var(--debt-customer)')
+          : 'var(--ok)';
+        const sign = increasesDebt ? '+' : '−';
         const MethodIcon = e.method && e.method !== 'debt' ? METHOD_ICON[e.method] : null;
         const deletable = Boolean(onDelete) && e.source !== 'sale' && e.source !== 'opening';
 

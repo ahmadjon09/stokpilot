@@ -293,6 +293,78 @@ const ru: Record<string, string> = {
   'backup.restored': 'Снапшот восстановлен',
   'backup.noSnapshots': 'Снапшотов пока нет',
 
+  // ── Навигация / стандарт долгов (v5) ──────────────────────────────────
+  'nav.stats': 'Статистика',
+  'nav.allSections': 'Все разделы',
+  'nav.mainNav': 'Основная навигация',
+  'nav.expand': 'Развернуть панель',
+  'nav.collapse': 'Свернуть панель',
+
+  'debt.netInFavor': 'в нашу пользу',
+  'debt.netAgainst': 'наш долг',
+  'debt.partiesCount': 'контрагентов',
+
+  // ── Поставщик (товар + склад) ──────────────────────────────────────────
+  'supplier.pickSupplier': 'Поставщик',
+  'supplier.mainSupplier': 'Основной поставщик',
+  'supplier.mainSupplierHint': 'Кто обычно поставляет этот товар',
+  'supplier.newSupplier': 'Новый поставщик',
+  'supplier.namePh': 'Например: ОсОО Ак Булут',
+  'supplier.searchPh': 'Поиск поставщика',
+  'supplier.empty': 'Поставщиков нет — добавьте кнопкой +',
+  'supplier.required': 'Выберите поставщика',
+  'supplier.created': 'Поставщик добавлен',
+  'supplier.sourceHint': 'От какого поставщика принимается товар',
+  'supplier.stockOnCredit': 'Начальный остаток в долг',
+  'supplier.stockOnCreditHint': 'Стоимость остатка будет записана в долг поставщику',
+
+  // ── Склад: приёмка от поставщика ───────────────────────────────────────
+  'stock.type.supply': 'Приёмка',
+  'stock.receiveTitle': 'Приёмка от поставщика',
+  'stock.unitCost': 'Себестоимость единицы',
+  'stock.unitCostHint': 'Если пусто — берётся себестоимость товара',
+  'stock.onCredit': 'Принять в долг',
+  'stock.onCreditHint': 'Сумма будет добавлена к долгу перед поставщиком',
+  'stock.updateCost': 'Обновить себестоимость товара',
+  'stock.updateCostHint': 'Цена новой партии станет себестоимостью товара',
+  'stock.addedQty': 'Добавится',
+  'stock.supplyTotal': 'Сумма приёмки',
+  'stock.willIncreaseDebt': 'На эту сумму увеличится наш долг поставщику',
+  'stock.paidCash': 'Оплачено наличными — долг не меняется',
+  'stock.errQty': 'Количество должно быть больше 0',
+
+  // ── Статистика (глубокая аналитика) ────────────────────────────────────
+  'stats.title': 'Статистика',
+  'stats.subtitle': 'Сегодня, текущий месяц и история по месяцам',
+  'stats.today': 'Сегодня',
+  'stats.vsYesterday': 'к вчерашнему',
+  'stats.vsPrevMonth': 'к прошлому месяцу',
+  'stats.revenue': 'Выручка',
+  'stats.profit': 'Прибыль',
+  'stats.checks': 'Чеки',
+  'stats.avgCheck': 'Средний чек',
+  'stats.units': 'Штук',
+  'stats.margin': 'Маржа',
+  'stats.creditSales': 'В долг',
+  'stats.monthCompare': 'Сравнение месяцев',
+  'stats.thisMonth': 'Текущий месяц',
+  'stats.rangeToday': 'Сегодня',
+  'stats.rangeMonth': 'Этот месяц',
+  'stats.dailyDynamics': 'Динамика по дням',
+  'stats.monthlyHistory': 'История по месяцам',
+  'stats.last12': 'последние 12 месяцев',
+  'stats.monthlyTable': 'Таблица по месяцам',
+  'stats.month': 'Месяц',
+  'stats.growth': 'Рост',
+  'stats.current': 'текущий',
+  'stats.noBase': 'нет базы',
+
+  // ── Настройки: две панели ──────────────────────────────────────────────
+  'settings.navDualHint': 'Выбранные разделы попадут в нижнюю панель. Полный список доступен и на телефоне, и на компьютере: на телефоне кнопка ☰ слева сверху открывает все разделы, на компьютере есть постоянный сайдбар. Ничего не теряется.',
+  'settings.navOrderHint': 'Меняйте порядок стрелками — нижняя панель будет в том же порядке.',
+  'settings.sidebarOnly': 'только сайдбар',
+
+
   // ── Частичный / поштучный возврат ───────────────────────────────────────
   'sales.netAmount': 'Сумма после возврата',
   'sales.partial': 'Частично возвращён',

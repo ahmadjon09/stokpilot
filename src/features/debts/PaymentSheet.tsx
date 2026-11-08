@@ -4,6 +4,7 @@ import { ArrowDownLeft, ArrowUpRight, Check } from 'lucide-react';
 import type { Customer, LedgerDirection, PayType } from '../../db/db';
 import { adjustDebt, recordPayment } from '../../db/actions';
 import { ledgerDelta, partyNet } from '../../db/ledger';
+import { debtTint, debtView } from '../../shared/lib/debt';
 import { formatMoney, round2 } from '../../shared/lib/format';
 import { buzz, toast } from '../../shared/lib/misc';
 import NumberInput from '../../shared/ui/NumberInput';
@@ -31,6 +32,7 @@ export interface PaymentSheetProps {
 export default function PaymentSheet({ party, mode, onClose, onSaved }: PaymentSheetProps) {
   const { t } = useTranslation();
   const net = partyNet(party.balance);
+  const view = debtView(party.balance, party.kind);
   const isSupplier = party.kind === 'supplier';
 
   const [direction, setDirection] = useState<LedgerDirection>(mode === 'charge' ? 'charge' : 'payment');
@@ -39,10 +41,6 @@ export default function PaymentSheet({ party, mode, onClose, onSaved }: PaymentS
   const [method, setMethod] = useState<PayType>('cash');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
-  /* Summa qarzdan oshmasligi kerak — ortiqcha to'lov "avans" bo'lib qoladi
-     va balansni teskari tomonga buradi. Bunga faqat "Qarz qo'shish" yo'li bor. */
-  const maxAmount = direction === 'payment' ? net.amount : Number.POSITIVE_INFINITY;
 
   /*
    * Saqlashdan oldin qoldiqni ko'rsatamiz. Hisob `ledgerDelta` bilan bir xil
@@ -108,8 +106,8 @@ export default function PaymentSheet({ party, mode, onClose, onSaved }: PaymentS
               : isSupplier ? t('debt.weOwe') : t('debt.theyOwe')}
           </p>
         </div>
-        <div className="flex-none text-right">
-          <p className="tnum text-[1.0625rem] font-extrabold" style={{ color: net.settled ? 'var(--ok)' : 'var(--bad)' }}>
+        <div className="flex-none rounded-lg px-2 py-1 text-right" style={{ background: debtTint(view.color, 10) }}>
+          <p className="tnum text-[1.0625rem] font-extrabold" style={{ color: view.color }}>
             {formatMoney(net.amount)}
           </p>
           <p className="text-[0.625rem] uppercase tracking-wide text-mute">{t('debt.dueNow')}</p>

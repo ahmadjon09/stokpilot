@@ -436,3 +436,44 @@ export async function migrateV3toV4(tx: Transaction): Promise<MigrationReport> {
 
   return report;
 }
+
+/* ---------------------------------------------------------------------- */
+/*  v4 → v5: yetkazib beruvchi integratsiyasi                              */
+/* ---------------------------------------------------------------------- */
+
+/**
+ * v5 ga o'tkazish — faqat MAYDOONLARNI TO'LDIRADI, hech narsani o'chirmaydi.
+ *
+ *  1) `products.supplierId` — bo'lmasa '' (biriktirilmagan). Mahsulotni
+ *     "egasiz" qoldirish xavfsiz: UI "—" ko'rsatadi va foydalanuvchi keyin
+ *     biriktiradi. Ehtimoliy taxmin qilib noto'g'ri yetkazib beruvchi
+ *     yozib qo'yish — auditni buzadi, shuning uchun ataylab bo'sh qoldiriladi.
+ *  2) `moves.supplierId` / `moves.unitCost` — faqat mavjud bo'lsa saqlanadi.
+ *  3) `moves.type` — eski qiymatlar o'zgarmaydi; 'supply' yangi tur bo'lib
+ *     qo'shiladi (validator `oneOf` orqali tanidi).
+ *
+ * Idempotent: qayta ishga tushirilsa hech narsa o'zgarmaydi.
+ */
+export async function migrateV4toV5(tx: Transaction): Promise<MigrationReport> {
+  const report = await normalizeDatabase(tx, { ledger: true, returns: true });
+
+  const productsTable = tx.table('products');
+  const products = await productsTable.toArray();
+  const patchedProducts = products
+    .filter((p) => typeof p.supplierId !== 'string')
+    .map((p) => ({ ...p, supplierId: '' }));
+
+  if (patchedProducts.length) {
+    await productsTable.bulkPut(patchedProducts);
+    report.repaired.products = (report.repaired.products ?? 0) + patchedProducts.length;
+    report.total += patchedProducts.length;
+  }
+
+  /*
+   * Kirimlar uchun `unitCost` ni mavjud mahsulot tannarxidan to'ldirish
+   * noto'g'ri bo'lardi (partiya narxi tarixan boshqacha bo'lishi mumkin) —
+   * shuning uchun faqat `undefined` ni qoldiramiz va UI "—" ko'rsatadi.
+   */
+
+  return report;
+}

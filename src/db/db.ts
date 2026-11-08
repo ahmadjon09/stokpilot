@@ -1,5 +1,5 @@
 import Dexie, { type Table, type Transaction } from 'dexie';
-import { mergeReports, migrateV1toV2, migrateV2toV3, migrateV3toV4, type MigrationReport } from './migrations';
+import { mergeReports, migrateV1toV2, migrateV2toV3, migrateV3toV4, migrateV4toV5, type MigrationReport } from './migrations';
 
 export type Unit = 'dona' | 'kg' | 'litr' | 'metr';
 
@@ -13,6 +13,13 @@ export interface Product {
   sku: string;
   name: string;
   categoryId: string;
+  /**
+   * Asosiy yetkazib beruvchi (Customer.id, kind='supplier').
+   * Bo'sh satr — biriktirilmagan. O'chirilgan yetkazib beruvchi ham shu
+   * yerda qoladi (tarix uchun), UI esa "topilmadi" holatini ko'rsatadi.
+   * v5 da qo'shildi.
+   */
+  supplierId: string;
   unit: Unit;
   cost: number;
   price: number;
@@ -34,7 +41,15 @@ export interface ImageRec {
   createdAt: number;
 }
 
-export type MoveType = 'in' | 'out' | 'recount' | 'sale' | 'return';
+/**
+ * Zaxira harakati turi.
+ *  in      — oddiy kirim (naqd/xarid)
+ *  supply  — yetkazib beruvchidan QARZGA kirim (daftarga charge yoziladi)
+ *  out     — chiqim
+ *  recount — inventarizatsiya
+ *  sale / return — sotuv va qaytarishdan avtomatik
+ */
+export type MoveType = 'in' | 'supply' | 'out' | 'recount' | 'sale' | 'return';
 
 export interface StockMove {
   id: string;
@@ -45,6 +60,15 @@ export interface StockMove {
   note: string;
   createdAt: number;
   refId?: string;
+  /**
+   * Kirim qaysi yetkazib beruvchidan (Customer.id, kind='supplier').
+   * Faqat `type: 'in'` da mazmunli. v5 da qo'shildi.
+   */
+  supplierId?: string;
+  /** Kirim paytidagi dona tannarxi — partiya narxi (v5) */
+  unitCost?: number;
+  /** Yetkazib beruvchiga qarz yozilgan bo'lsa — daftar yozuvi ID'si (v5) */
+  ledgerEntryId?: string;
 }
 
 export type PayType = 'cash' | 'card' | 'transfer' | 'debt';
@@ -223,7 +247,7 @@ export interface Snapshot {
  * Dexie eski versiyalardagi `.stores()` ta'riflarini o'zi saqlab qoladi —
  * shuning uchun eski bloklarni o'chirib tashlamang.
  */
-export const DB_VERSION = 4;
+export const DB_VERSION = 5;
 
 class StokPilotDB extends Dexie {
   products!: Table<Product, string>;
@@ -307,7 +331,7 @@ class StokPilotDB extends Dexie {
     // Indekslar:
     //   saleId              — chek bo'yicha barcha qaytarishlar
     //   [saleId+createdAt]  — chek tarixidagi xronologiya
-    this.version(DB_VERSION).stores({
+    this.version(4).stores({
       products: 'id, name, sku, categoryId, barcode, updatedAt',
       categories: 'id, name',
       images: 'id, productId',
@@ -320,6 +344,30 @@ class StokPilotDB extends Dexie {
       snapshots: 'id, createdAt',
     }).upgrade(async (tx) => {
       this.lastMigration = mergeReports(this.lastMigration, await migrateV3toV4(tx));
+    });
+
+    // ── v5 — yetkazib beruvchi integratsiyasi (mahsulot + zaxira) ───────
+    // 1) `products.supplierId` — mahsulotning asosiy yetkazib beruvchisi;
+    //    indeks qo'shildi: "shu yetkazib beruvchining barcha mahsulotlari".
+    // 2) `moves.supplierId` + `moves.unitCost` — partiya/qarzga kirim audit.
+    //    Indeks `[supplierId+createdAt]` — kirimlar tarixi bo'yicha hisobot.
+    // 3) `MoveType` ga 'supply' (qarzga kirim) qo'shildi.
+    //
+    // Migratsiya IDEMPOTENT va faqat maydonlarni to'ldiradi — hech qanday
+    // mavjud qiymat o'chirilmaydi yoki qayta yozilmaydi.
+    this.version(DB_VERSION).stores({
+      products: 'id, name, sku, categoryId, barcode, updatedAt, supplierId',
+      categories: 'id, name',
+      images: 'id, productId',
+      moves: 'id, productId, createdAt, type, refId, supplierId, [supplierId+createdAt]',
+      sales: 'id, createdAt, number, customerId, status, payType',
+      customers: 'id, name, kind',
+      ledger: 'id, partyId, createdAt, [partyId+createdAt], partyKind, [partyKind+createdAt], saleId',
+      returns: 'id, saleId, createdAt, [saleId+createdAt]',
+      logs: 'id, createdAt, action',
+      snapshots: 'id, createdAt',
+    }).upgrade(async (tx) => {
+      this.lastMigration = mergeReports(this.lastMigration, await migrateV4toV5(tx));
     });
   }
 }
