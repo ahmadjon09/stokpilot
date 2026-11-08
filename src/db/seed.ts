@@ -15,7 +15,9 @@ export async function wipeAll(): Promise<void> {
       ]);
     }
   );
-  // Sessiyadagi vaqtinchalik holat (savat, qoralamalar) ham tozalanadi
+  // Sessiyadagi vaqtinchalik holat (savat, qoralamalar) ham tozalanadi.
+  // Sozlamalar (`sp-settings`) ATAYLAB tegilmaydi — foydalanuvchi tanlagan
+  // til, tema va biznes ma'lumotlari saqlanib qoladi.
   try {
     sessionStorage.removeItem('sp-cart');
     sessionStorage.removeItem('sp-draft-product-new');

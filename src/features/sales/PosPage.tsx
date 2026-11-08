@@ -17,7 +17,18 @@ const CART_KEY = 'sp-cart';
 interface CartLine { productId: string; qty: number }
 
 function loadCart(): CartLine[] {
-  try { return JSON.parse(sessionStorage.getItem(CART_KEY) ?? '[]') as CartLine[]; } catch { return []; }
+  try {
+    const raw = sessionStorage.getItem(CART_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    // Validatsiya: buzilgan/yangi formatdagi qatorlar savatni yiqitmasligi kerak
+    return parsed
+      .filter((l): l is CartLine =>
+        Boolean(l) && typeof (l as CartLine).productId === 'string' &&
+        typeof (l as CartLine).qty === 'number' && (l as CartLine).qty > 0)
+      .map((l) => ({ productId: l.productId, qty: Math.max(1, l.qty) }));
+  } catch { return []; }
 }
 
 export default function PosPage() {
@@ -98,6 +109,9 @@ export default function PosPage() {
       setCustomerId('');
       setPayType('cash');
       buzz(20);
+      // Chekni ochishda orqa fon sifatida JORIY (menyu bilan bir xil) holat beriladi.
+      // `resolveBackground` orqali — sheet ustida yangi sheet ochilsa ham POS
+      // sahifasi orqada saqlanib qoladi va "orqaga" to'g'ri ishlaydi.
       navigate(`/sales/receipt/${sale.id}`, { state: { background: { pathname: '/sales', search: '' } } });
     } catch {
       toast(t('common.error'));
@@ -106,9 +120,39 @@ export default function PosPage() {
     }
   };
 
+  /* ------------------------------------------------------------------ */
+  /*  SAVAT PANELI                                                       */
+  /* ------------------------------------------------------------------ */
+  /*
+   * Layout ierarxiyasi (mobil muammoning yechimi):
+   *
+   *   .cart-panel (flex column, overflow hidden, max-height cheklangan)
+   *     ├─ .cart-panel-head   → flex-none        (yig'ish/ochish sarlavhasi)
+   *     ├─ .cart-body         → flex-1, min-h-0, overflow-y: auto
+   *     │    ├─ .cart-lines   → mahsulot qatorlari (scroll)
+   *     │    └─ .cart-options → chegirma / to'lov / jami (scroll)
+   *     └─ .cart-foot         → flex-none, scroll'dan tashqarida (har doim ko'rinadi)
+   *
+   * Kalit nuqtalar:
+   *  1. `min-height: 0` — flex bolasi o'z ichida scroll bo'lishi uchun SHART,
+   *     aks holda kontent panelni cho'zib, tugmalarni ekrandan chiqarib yuboradi.
+   *  2. `overscroll-behavior: contain` — ro'yxat tugaganda orqadagi mahsulot
+   *     gridi "sakrab" ketmaydi (mobil WebView'da asosiy shikoyat shu edi).
+   *  3. Amallar paneli (`cart-foot`) scroll konteyneridan TASHQARIDA — shuning
+   *     uchun u hech qachon ro'yxat ostida "yo'qolib" qolmaydi va ustiga
+   *     tushmaydi. Bu sticky/fixed hack'lardan ishonchliroq.
+   *  4. Balandlik `dvh` bilan cheklanadi — mobil brauzer manzil satri
+   *     yopilib-ochilganda panel ekrandan chiqib ketmaydi.
+   */
   const cartPanel = (
-    <div className="card flex max-h-full flex-col overflow-hidden">
-      <button type="button" className="flex items-center justify-between px-4 py-3" onClick={() => setCartOpen((o) => !o)} aria-expanded={cartOpen}>
+    <div className="cart-panel card">
+      <button
+        type="button"
+        className="cart-panel-head flex items-center justify-between px-4 py-3"
+        onClick={() => setCartOpen((o) => !o)}
+        aria-expanded={cartOpen}
+        aria-controls="sp-cart-body"
+      >
         <span className="flex min-w-0 items-center gap-2 text-[0.9375rem] font-bold">
           <ShoppingCart size={18} strokeWidth={1.5} className="flex-none text-accent" />
           <span className="truncate">{t('sales.cart')} · {lines.length}</span>
@@ -120,77 +164,90 @@ export default function PosPage() {
       </button>
 
       {cartOpen && (
-        <div className="flex min-h-0 flex-col overflow-y-auto">
-          <div className="row-list shrink-0 border-t border-line">
-            {lines.length === 0 && <p className="px-4 py-5 text-center text-[0.8125rem] text-mute">{t('sales.emptyCart')}</p>}
-            {lines.map((l) => (
-              <div key={l.productId} className="flex items-center gap-2 px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[0.8438rem] font-semibold">{l.product.name}</p>
-                  <p className="tnum text-[0.75rem] text-mute">{formatMoney(l.product.price)} × {l.qty}</p>
-                </div>
-                <div className="flex flex-none items-center gap-0.5">
-                  <button type="button" className="icon-btn" style={{ width: 36, height: 36, background: 'var(--surface2)' }} aria-label="−1" onClick={() => changeQty(l.productId, -1)}>
-                    <Minus size={15} strokeWidth={1.5} />
-                  </button>
-                  <button type="button" className="icon-btn" style={{ width: 36, height: 36, background: 'var(--surface2)' }} aria-label="+1" onClick={() => changeQty(l.productId, 1)}>
-                    <Plus size={15} strokeWidth={1.5} />
-                  </button>
-                  <button type="button" className="icon-btn" style={{ width: 36, height: 36, color: 'var(--bad)' }} aria-label={t('common.delete')}
-                    onClick={() => { buzz(8); setCart((c) => c.filter((x) => x.productId !== l.productId)); }}>
-                    <Trash2 size={15} strokeWidth={1.5} />
-                  </button>
-                </div>
+        <div id="sp-cart-body" className="cart-body">
+          {lines.length === 0 ? (
+            <p className="px-4 py-5 text-center text-[0.8125rem] text-mute">{t('sales.emptyCart')}</p>
+          ) : (
+            <>
+              <div className="row-list cart-lines border-t border-line">
+                {lines.map((l) => (
+                  <div key={l.productId} className="flex items-center gap-2 px-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[0.8438rem] font-semibold">{l.product.name}</p>
+                      <p className="tnum text-[0.75rem] text-mute">{formatMoney(l.product.price)} × {l.qty}</p>
+                    </div>
+                    <div className="flex flex-none items-center gap-0.5">
+                      <button type="button" className="icon-btn" style={{ width: 36, height: 36, background: 'var(--surface2)' }} aria-label="−1" onClick={() => changeQty(l.productId, -1)}>
+                        <Minus size={15} strokeWidth={1.5} />
+                      </button>
+                      <button type="button" className="icon-btn" style={{ width: 36, height: 36, background: 'var(--surface2)' }} aria-label="+1" onClick={() => changeQty(l.productId, 1)}>
+                        <Plus size={15} strokeWidth={1.5} />
+                      </button>
+                      <button type="button" className="icon-btn" style={{ width: 36, height: 36, color: 'var(--bad)' }} aria-label={t('common.delete')}
+                        onClick={() => { buzz(8); setCart((c) => c.filter((x) => x.productId !== l.productId)); }}>
+                        <Trash2 size={15} strokeWidth={1.5} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          {lines.length > 0 && (
-            <div className="space-y-3 border-t border-line p-3.5">
-              <div className="grid grid-cols-2 gap-2">
-                <Segmented value={discountType} onChange={(v) => { setDiscountType(v); if (v === 'none') setDiscountValue(null); }} options={[
-                  { value: 'none', label: t('sales.discount.none') },
-                  { value: 'percent', label: t('sales.discount.percent') },
-                  { value: 'amount', label: t('sales.discount.amount') },
-                ]} />
-                {discountType !== 'none' ? (
-                  <NumberInput value={discountValue} onChange={setDiscountValue} placeholder={discountType === 'percent' ? '0 %' : '0'} ariaLabel={t('sales.discount')} />
-                ) : (
+              {/* Chegirma / to'lov / jami — scroll zonasida (ro'yxat bilan birga) */}
+              <div className="cart-options space-y-3 border-t border-line p-3.5">
+                <div className="grid grid-cols-2 gap-2">
+                  <Segmented value={discountType} onChange={(v) => { setDiscountType(v); if (v === 'none') setDiscountValue(null); }} options={[
+                    { value: 'none', label: t('sales.discount.none') },
+                    { value: 'percent', label: t('sales.discount.percent') },
+                    { value: 'amount', label: t('sales.discount.amount') },
+                  ]} />
+                  {discountType !== 'none' ? (
+                    <NumberInput value={discountValue} onChange={setDiscountValue} placeholder={discountType === 'percent' ? '0 %' : '0'} ariaLabel={t('sales.discount')} />
+                  ) : (
+                    <select className="input" value={customerId} onChange={(e) => setCustomerId(e.target.value)} aria-label={t('sales.customer')}>
+                      <option value="">{t('sales.noCustomer')}</option>
+                      {customers.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                    </select>
+                  )}
+                </div>
+                {discountType !== 'none' && (
                   <select className="input" value={customerId} onChange={(e) => setCustomerId(e.target.value)} aria-label={t('sales.customer')}>
                     <option value="">{t('sales.noCustomer')}</option>
                     {customers.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
                   </select>
                 )}
+                <Segmented value={payType} onChange={setPayType} options={[
+                  { value: 'cash', label: t('sales.pay.cash') },
+                  { value: 'card', label: t('sales.pay.card') },
+                  { value: 'transfer', label: t('sales.pay.transfer') },
+                  { value: 'debt', label: t('sales.pay.debt') },
+                ]} />
+                <div className="space-y-1 text-[0.8438rem]">
+                  <div className="flex justify-between text-mute"><span>{t('sales.subtotal')}</span><span className="tnum">{formatMoney(subtotal)}</span></div>
+                  {discount > 0 && <div className="flex justify-between" style={{ color: 'var(--bad)' }}><span>{t('sales.discount')}</span><span className="tnum">−{formatMoney(discount)}</span></div>}
+                  {vatPart > 0 && <div className="flex justify-between text-mute"><span>{t('sales.vatIncluded')} ({formatNumber(vat)}%)</span><span className="tnum">{formatMoney(vatPart)}</span></div>}
+                  <div className="flex justify-between pt-1 text-[1rem] font-extrabold"><span>{t('common.total')}</span><span className="tnum">{formatMoney(total)}</span></div>
+                </div>
               </div>
-              {discountType !== 'none' && (
-                <select className="input" value={customerId} onChange={(e) => setCustomerId(e.target.value)} aria-label={t('sales.customer')}>
-                  <option value="">{t('sales.noCustomer')}</option>
-                  {customers.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-                </select>
-              )}
-              <Segmented value={payType} onChange={setPayType} options={[
-                { value: 'cash', label: t('sales.pay.cash') },
-                { value: 'card', label: t('sales.pay.card') },
-                { value: 'transfer', label: t('sales.pay.transfer') },
-                { value: 'debt', label: t('sales.pay.debt') },
-              ]} />
-              <div className="space-y-1 text-[0.8438rem]">
-                <div className="flex justify-between text-mute"><span>{t('sales.subtotal')}</span><span className="tnum">{formatMoney(subtotal)}</span></div>
-                {discount > 0 && <div className="flex justify-between" style={{ color: 'var(--bad)' }}><span>{t('sales.discount')}</span><span className="tnum">−{formatMoney(discount)}</span></div>}
-                {vatPart > 0 && <div className="flex justify-between text-mute"><span>{t('sales.vatIncluded')} ({formatNumber(vat)}%)</span><span className="tnum">{formatMoney(vatPart)}</span></div>}
-                <div className="flex justify-between pt-1 text-[1rem] font-extrabold"><span>{t('common.total')}</span><span className="tnum">{formatMoney(total)}</span></div>
-              </div>
-              <div className="flex gap-2">
-                <button type="button" className="icon-btn border border-line" aria-label={t('sales.clearCart')}
-                  onClick={() => { buzz(10); setCart([]); }}>
-                  <Trash2 size={18} strokeWidth={1.5} />
-                </button>
-                <button type="button" className="btn btn-primary flex-1" disabled={checkoutBusy || lines.length === 0} onClick={() => void checkout()}>
-                  {t('sales.checkout')}
-                </button>
-              </div>
-            </div>
+            </>
           )}
+        </div>
+      )}
+
+      {/* Amallar paneli — scroll zonasidan tashqarida: mobil'da hech qachon
+          kontent ostida qolib ketmaydi. `lines.length === 0` bo'lsa ko'rsatilmaydi. */}
+      {cartOpen && lines.length > 0 && (
+        <div className="cart-foot">
+          <button type="button" className="icon-btn border border-line" aria-label={t('sales.clearCart')}
+            onClick={() => { buzz(10); setCart([]); }}>
+            <Trash2 size={18} strokeWidth={1.5} />
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="text-[0.6875rem] font-semibold uppercase tracking-wide text-mute">{t('common.total')}</p>
+            <p className="tnum truncate text-[1.0625rem] font-extrabold leading-tight">{formatMoney(total)}</p>
+          </div>
+          <button type="button" className="btn btn-primary flex-1" disabled={checkoutBusy || lines.length === 0} onClick={() => void checkout()}>
+            {t('sales.checkout')}
+          </button>
         </div>
       )}
     </div>
@@ -226,7 +283,9 @@ export default function PosPage() {
         {grid.length === 0 ? (
           <div className="card"><EmptyState icon={Package} title={t('dash.noData')} /></div>
         ) : (
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+          // Savat ochiq bo'lsa — mobil'da grid pastida qo'shimcha joy, aks holda
+          // dock oxirgi qator mahsulotlarini to'sib qo'yadi.
+          <div className={'grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4' + (lines.length > 0 ? ' pb-44 md:pb-0' : '')}>
             {grid.map((p) => {
               const out = p.stock <= 0;
               return (
@@ -248,13 +307,17 @@ export default function PosPage() {
         )}
       </div>
 
-      {/* Planshet: o'ng ustun; mobil: pastda panel */}
+      {/* Planshet/desktop: o'ng ustun. `max-height` = viewport - (header + padding),
+          shunda savat ro'yxati o'z ichida scroll bo'ladi, sahifa emas. */}
       <div className="hidden md:block">
-        <div className="sticky top-6">{cartPanel}</div>
+        <div className="sticky top-6">
+          <div className="cart-desktop-wrap">{cartPanel}</div>
+        </div>
       </div>
+
+      {/* Mobil: pastda suzuvchi panel — bottom nav ustida, viewport balandligidan oshmaydi */}
       {lines.length > 0 && (
-        <div className="fixed inset-x-0 z-40 px-3 md:hidden"
-          style={{ bottom: 'calc(62px + env(safe-area-inset-bottom))', maxHeight: 'calc(100dvh - 130px)' }}>
+        <div className="cart-mobile-dock fixed inset-x-0 z-40 px-3 md:hidden">
           {cartPanel}
         </div>
       )}

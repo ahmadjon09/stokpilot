@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Camera, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { db, uid, nextSku, type Product, type Unit } from '../../db/db';
@@ -8,7 +8,7 @@ import { round2 } from '../../shared/lib/format';
 import { deleteProduct } from '../../db/actions';
 import { processImageFile } from '../../shared/lib/img';
 import { useSettings } from '../../store/settings';
-import { useOpenSheet } from '../../shared/lib/nav';
+import { useCloseSheet, useOpenSheet } from '../../shared/lib/nav';
 import { buzz, toast } from '../../shared/lib/misc';
 import Sheet from '../../shared/ui/Sheet';
 import NumberInput from '../../shared/ui/NumberInput';
@@ -34,13 +34,11 @@ interface FormState {
 export default function ProductFormSheet() {
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
-  const location = useLocation();
   const navigate = useNavigate();
   const { t } = useTranslation();
   const defaultMinStock = useSettings((s) => s.biz.minStock);
-  const hasBackground = Boolean((location.state as { background?: unknown } | null)?.background);
-  const fallback = '/products';
-  const close = () => { if (hasBackground) navigate(-1); else navigate(fallback); };
+  // yagona yopish mantiqi: orqada sahifa bo'lsa — tarixda orqaga, aks holda fallback
+  const close = useCloseSheet('/products');
 
   const products = useLiveQuery(async () => (id ? db.products.get(id) : undefined), [id]);
   const categories = useLiveQuery(() => db.categories.orderBy('name').toArray(), []) ?? [];

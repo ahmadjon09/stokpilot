@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { applyMove } from '../../db/actions';
 import { formatNumber } from '../../shared/lib/format';
-import { useOpenSheet } from '../../shared/lib/nav';
+import { useCloseSheet, useOpenSheet } from '../../shared/lib/nav';
 import { buzz, toast } from '../../shared/lib/misc';
 import Sheet from '../../shared/ui/Sheet';
 import NumberInput from '../../shared/ui/NumberInput';
@@ -15,10 +14,8 @@ type MoveKind = 'in' | 'out' | 'recount';
 
 export default function MoveFormSheet() {
   const { t } = useTranslation();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const hasBackground = Boolean((location.state as { background?: unknown } | null)?.background);
-  const close = () => { if (hasBackground) navigate(-1); else navigate('/stock'); };
+  // yagona yopish mantiqi: orqada sahifa bo'lsa — tarixda orqaga, aks holda fallback
+  const close = useCloseSheet('/stock');
 
   const [product, setProduct] = useState<Product | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);

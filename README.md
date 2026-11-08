@@ -11,7 +11,7 @@ Backend yo'q — 100% client-side, barcha ma'lumot **IndexedDB** (Dexie.js) da, 
 |---|---|
 | Framework | React 18 + TypeScript (strict), Vite 5 |
 | Routing | React Router v6 — har bir modal/bottom-sheet alohida route (`/products/:id/edit`, `/sales/receipt/:id`, `/settings/storage`…). Back tugmasi sheet'ni yopadi, deep-link va refresh ishlaydi |
-| DB | Dexie.js (IndexedDB), versiyalangan schema (`db.version(1)`) |
+| DB | Dexie.js (IndexedDB), **versiyalangan schema + migratsiya** (`db.version(1..2)`, `onupgradeneeded` ichida validatsiya/tiklash) |
 | State | Zustand (persist) sozlamalar uchun |
 | UI | Tailwind CSS v4 + CSS-variable theme tokenlari |
 | Charts | Recharts (responsive, theme-aware) |
@@ -26,7 +26,30 @@ npm install
 npm run build      # tsc strict + vite build
 npm run preview    # production preview (SW bilan offline)
 npm run dev        # dev server
+npm run check      # migratsiya + navigatsiya smoke-testlari + tsc
 ```
+
+## Ma'lumotlar xavfsizligi (migratsiya)
+
+Baza versiyalangan: har bir sxema o'zgarishi `db.version(N).upgrade(...)` bilan
+kuzatiladi. Legacy yozuvlar **hech qachon o'chirilmaydi** — ular `src/db/validate.ts`
+orqali normallashtiriladi (yo'q maydonlar to'ldiriladi, noto'g'ri tiplar
+tuzatiladi, `"1 234,5"` kabi satrlar songa aylantiriladi).
+
+| Qatlam | Fayl | Vazifa |
+|---|---|---|
+| Validatsiya | `src/db/validate.ts` | har bir yozuv uchun `{value, changed}` — buzilganini `null` qaytaradi |
+| Migratsiya | `src/db/migrations.ts` | `normalizeDatabase(tx)` — jadval bo'yicha tuzatish + bog'lanishlarni tiklash (rasm havolalari, chek raqamlari) |
+| Sxema | `src/db/db.ts` | `DB_VERSION`, `version(1)` (o'zgarmas), `version(2).upgrade()`, `openDatabase()` fallback, `repairDatabase()` |
+| Error boundary | `src/shared/ui/DbGate.tsx` | baza ochilmasa tushunarli xabar + retry; tiklash natijasini toast bilan ko'rsatadi |
+
+Yarim uzilgan migratsiya xavfsiz: barcha qadamlar **idempotent**
+(`npm run check:migrations` buni tekshiradi).
+
+Baza umuman ochilmasa (`DataError`, `BlockedError`) — avval yozuvlar "rescue"
+qilinadi, keyin baza qayta yaratiladi; ma'lumotninig bir qismi ham o'qilmasa,
+baza **o'chirilmaydi** — foydalanuvchiga xabar va "qayta urinish" beriladi.
+Xotira bo'limida qo'lda "Ma'lumotlarni tekshirish" (`repairDatabase`) tugmasi bor.
 
 ## Modullar
 
@@ -59,8 +82,31 @@ src/
   store/         # settings (zustand persist)
 ```
 
+## Sotuv tarixi va chek detali
+
+- `/sales/history` — qidiruv (chek raqami / mijoz / mahsulot), "qaytarilmagan" filtri;
+  qatorning istalgan joyiga bosilsa chek ochiladi.
+- `/sales/receipt/:id` — mahsulotlar, oraliq jami, chegirma, NDS, jami, to'lov turi,
+  mijoz, tannarx va foyda (ekranda; chop etishda ko'rinmaydi), qaytarilgan holati.
+- Uch holat aniq ajratiladi: `undefined` — skeleton, `null` — "Chek topilmadi", yozuv — detal.
+- Sheet'lar nested ochilganda orqa fon meros olinadi (`resolveBackground`), shu sababli
+  Savat → Tarix → Chek zanjirida "orqaga" POS sahifasiga qaytaradi.
+
+## Mobil savat (POS) layouti
+
+```
+.cart-panel            flex column, max-height: calc(100dvh - …), overflow hidden
+ ├─ .cart-panel-head   flex: none
+ ├─ .cart-body         flex: 1 1 auto; min-height: 0; overflow-y: auto   ← faqat shu scroll
+ └─ .cart-foot         flex: none                                        ← "To'lovni yakunlash"
+```
+
+`min-height: 0` bo'lmasa flex bola kontentni cho'zib, tugmalarni ekrandan chiqaradi.
+Amallar paneli scroll konteyneridan tashqarida — mahsulot soni qanchalik ko'p bo'lsa ham
+tugma doim ko'rinadi. `overscroll-behavior: contain` orqa fon "sakrashini" to'xtatadi.
+
 ## Keyingi bosqich uchun yo'nalishlar
 
-- `db.version(2)` migratsiyalari uchun tayyor schema
+- `db.version(3)` — masalan, `sales.items` uchun alohida jadval
 - TanStack Virtual (juda katta ro'yxatlar), exceljs/pdfmake kutubxonalari
 - Swipe amallar va pull-to-refresh kengaytmalari

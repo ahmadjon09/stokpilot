@@ -1,4 +1,5 @@
-import { db, uid, type Snapshot } from '../../db/db';
+import { db, uid, DB_VERSION, type Snapshot } from '../../db/db';
+import { normalizeDatabase } from '../../db/migrations';
 import { downloadBlob } from './misc';
 
 const TABLES = ['products', 'categories', 'images', 'moves', 'sales', 'customers', 'logs'] as const;
@@ -6,17 +7,18 @@ type TableName = (typeof TABLES)[number];
 
 export interface BackupFile {
   app: 'stokpilot';
+  /** Fayl formati versiyasi — importda migratsiya uchun ishlatiladi */
   version: number;
   exportedAt: number;
-  tables: Record<TableName, unknown[]>;
+  tables: Partial<Record<TableName, unknown[]>>;
 }
 
 export async function buildBackup(): Promise<BackupFile> {
-  const tables = {} as Record<TableName, unknown[]>;
+  const tables: Partial<Record<TableName, unknown[]>> = {};
   for (const t of TABLES) {
     tables[t] = await db.table(t).toArray();
   }
-  return { app: 'stokpilot', version: 1, exportedAt: Date.now(), tables };
+  return { app: 'stokpilot', version: DB_VERSION, exportedAt: Date.now(), tables };
 }
 
 export async function exportAllToFile(): Promise<void> {
@@ -42,16 +44,35 @@ export function isValidBackup(obj: unknown): obj is BackupFile {
   return b.app === 'stokpilot' && typeof b.tables === 'object' && b.tables !== null;
 }
 
+/**
+ * Backup'ni tiklash.
+ *
+ * MUHIM: import qilingan yozuvlar "ko'r-ko'rona" saqlanmaydi. Ular joriy
+ * sxema bo'yicha normallashtiriladi (validate.ts orqali) — shu tufayli eski
+ * versiyada olingan backup ham yangi bazaga xavfsiz tushadi.
+ * `db.transaction` ichida `db.*` ishlatilmaydi (faqat `tx.table`).
+ */
 export async function restoreBackup(data: BackupFile): Promise<void> {
   await db.transaction(
     'rw',
     [db.products, db.categories, db.images, db.moves, db.sales, db.customers, db.logs],
-    async () => {
+    async (tx) => {
       for (const t of TABLES) {
-        await db.table(t).clear();
+        await tx.table(t).clear();
         const rows = data.tables[t];
-        if (Array.isArray(rows) && rows.length) await db.table(t).bulkAdd(rows);
+        if (Array.isArray(rows) && rows.length) {
+          // Yaroqsiz qatorlar butun importni to'xtatmasligi kerak
+          try {
+            await tx.table(t).bulkAdd(rows);
+          } catch {
+            for (const row of rows) {
+              try { await tx.table(t).add(row); } catch { /* qatorni o'tkazib yuborish */ }
+            }
+          }
+        }
       }
+      // Sxema/farq normalizatsiyasi — legacy maydonlar to'ldiriladi
+      await normalizeDatabase(tx);
     }
   );
 }

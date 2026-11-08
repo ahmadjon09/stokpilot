@@ -161,6 +161,14 @@ const uz: Record<string, string> = {
   'sales.emptyHistory': 'Sotuvlar hali yo\'q',
   'sales.vatIncluded': 'shu jumladan NDS',
   'sales.paySuccess': 'To\'lov qabul qilindi',
+  'sales.receiptNotFound': 'Chek topilmadi',
+  'sales.receiptNotFoundHint': "Bu chek o'chirilgan yoki ma'lumotlar yangilangan bo'lishi mumkin.",
+  'sales.searchHistoryPh': 'Chek raqami, mijoz yoki mahsulot…',
+  'sales.onlyActive': 'Qaytarilmagan',
+  'sales.nothingFound': "Hech narsa topilmadi",
+  'sales.nothingFoundHint': "Qidiruv so'zini o'zgartirib ko'ring.",
+  'sales.costTotal': 'Tannarx (jami)',
+  'sales.returnedHint': "Bu sotuv qaytarilgan — mahsulotlar omborga qaytarildi.",
 
   'customers.title': 'Mijozlar va yetkazib beruvchilar',
   'customers.new': 'Yangi kontakt',
@@ -283,6 +291,18 @@ const uz: Record<string, string> = {
   'backup.restoreConfirm': 'Snapshot tiklansinmi? Joriy ma\'lumotlar almashtiriladi.',
   'backup.restored': 'Snapshot tiklandi',
   'backup.noSnapshots': 'Snapshotlar hali yo\'q',
+
+  // ── Baza / migratsiya holatlari ─────────────────────────────────────────
+  'db.repaired': "Ma'lumotlar yangi versiyaga moslandi — barcha yozuvlar saqlab qolindi",
+  'db.reseeded': "Baza qayta tiklandi, eski yozuvlar imkon qadar qaytarildi",
+  'db.blocked': "Bazani ochib bo'lmadi — ilovani yangilang yoki qayta ishga tushiring",
+  'db.blockedTitle': "Ma'lumotlar bazasi band",
+  'db.blockedText': "Bazani ochish imkonsiz. Boshqa oynada StokPilot ochiq bo'lsa — uni yoping va qayta urinib ko'ring. Ma'lumotlaringiz o'chirilmagan.",
+  'db.noDataLost': "Ma'lumotlar o'chirilmadi",
+  'db.repairNow': "Ma'lumotlarni tekshirish",
+  'db.repairDone': "ta yozuv tuzatildi",
+  'db.repairOk': "Barcha yozuvlar to'g'ri",
+  'db.repairFailed': "Tekshirishda xato yuz berdi",
 
   'empty.default': 'Bu yerda hali narsa yo\'q',
 };
