@@ -14,6 +14,7 @@ import CustomerFormSheet from './features/customers/CustomerForm';
 import DebtsPage from './features/debts/DebtsPage';
 import PartySheet from './features/debts/PartySheet';
 import ReportsPage from './features/reports/ReportsPage';
+import StatisticsPage from './features/reports/StatisticsPage';
 import SettingsPage from './features/settings/SettingsPage';
 import StorageSheet from './features/settings/StorageSheet';
 import { applyAppearance, useSettings } from './store/settings';
@@ -80,6 +81,7 @@ export default function App() {
           <Route path="customers" element={<CustomersPage />} />
           <Route path="debts" element={<DebtsPage />} />
           <Route path="reports" element={<ReportsPage />} />
+          <Route path="stats" element={<StatisticsPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

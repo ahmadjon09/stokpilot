@@ -5,6 +5,7 @@ import {
 import { buildLedgerEntry, ledgerDelta } from './ledger';
 import { planReturn, returnedTotals, discountFactor, saleStatus, type ReturnSelection } from './returns';
 import { round2 } from '../shared/lib/format';
+import { resolveDebtDirection } from '../shared/lib/debt';
 
 /** Zaxira harakati: in(+) / out(-) / recount(mutlaq qiymat) */
 export async function applyMove(params: {
@@ -79,6 +80,7 @@ export async function recordPayment(params: {
   method?: PayType | '';
   at?: number;
 }): Promise<LedgerEntry> {
+  if (!Number.isFinite(params.amount)) throw new Error('invalid_amount');
   const amount = Math.abs(round2(params.amount));
   if (!(amount > 0)) throw new Error('invalid_amount');
 
@@ -112,6 +114,13 @@ export async function adjustDebt(params: {
   direction: LedgerDirection;
   note?: string;
 }): Promise<LedgerEntry> {
+  /*
+   * Summani qat'iy tekshiramiz: NaN / Infinity / manfiy qiymat bazaga
+   * tushmasligi kerak (manfiy sonlar bilan bog'liq xatolar aynan shu
+   * yerdan boshlanardi — `Math.abs(NaN)` = NaN bo'lib, balans NaN ga
+   * aylanardi va butun daftar o'qilmay qolardi).
+   */
+  if (!Number.isFinite(params.amount)) throw new Error('invalid_amount');
   const amount = Math.abs(round2(params.amount));
   if (!(amount > 0)) throw new Error('invalid_amount');
 
@@ -447,6 +456,113 @@ export async function returnSale(saleId: string, note = ''): Promise<ReturnRec> 
 }
 
 /* ---------------------------------------------------------------------- */
+/*  Yetkazib beruvchidan qarzga kirim (supply)                             */
+/* ---------------------------------------------------------------------- */
+
+export interface SupplyInput {
+  productId: string;
+  qty: number;
+  supplierId: string;
+  /** Bir dona uchun tannarx — bo'lmasa mahsulotning joriy tannarxi */
+  unitCost?: number | null;
+  /** Yetkazib beruvchiga qarz yozilsinmi (true) yoki naqd to'landimi (false) */
+  onCredit: boolean;
+  note?: string;
+  /** Yangi tannarxni mahsulotga ham yozish (o'rtacha emas, oxirgi narx) */
+  updateCost?: boolean;
+}
+
+/**
+ * Yetkazib beruvchidan tovar qabul qilish — BITTA atomar amal.
+ *
+ * Nima qiladi (hammasi bitta tranzaksiyada):
+ *  1) `products.stock += qty` (va ixtiyoriy ravishda tannarx yangilanadi);
+ *  2) `moves` ga `type: 'supply'` yozuvi — supplierId, unitCost, note;
+ *  3) agar `onCredit` bo'lsa — yetkazib beruvchiga `charge` daftar yozuvi,
+ *     ya'ni bizning qarzimiz oshadi (balans manfiy tomonga suriladi).
+ *
+ * Nega bitta funksiya: ilgari foydalanuvchi kirimni qo'lda qilib, keyin
+ * qarzni alohida kiritishi kerak edi — ikkalasi orasida xato qilish oson
+ * edi (kirim yozilgan, qarz esa yo'q → ombor bilan hisob mos kelmasdi).
+ *
+ * Xatolik bo'lsa hech narsa yozilmaydi (tranzaksiya bekor qilinadi).
+ */
+export async function supplyFromSupplier(input: SupplyInput): Promise<{
+  moveId: string;
+  ledgerEntryId: string | null;
+  stockAfter: number;
+}> {
+  const { productId, supplierId, onCredit, note = '' } = input;
+  const qty = round2(input.qty);
+
+  if (!Number.isFinite(qty) || qty <= 0) throw new Error('invalid_qty');
+  if (!productId) throw new Error('product_not_found');
+  if (!supplierId) throw new Error('supplier_required');
+
+  return db.transaction(
+    'rw',
+    [db.products, db.moves, db.customers, db.ledger, db.logs],
+    async () => {
+      const product = await db.products.get(productId);
+      if (!product) throw new Error('product_not_found');
+
+      const supplier = await db.customers.get(supplierId);
+      if (!supplier || supplier.kind !== 'supplier') throw new Error('supplier_not_found');
+
+      const now = Date.now();
+      const unitCost = Number.isFinite(input.unitCost ?? NaN) && (input.unitCost ?? 0) > 0
+        ? round2(input.unitCost as number)
+        : round2(product.cost);
+
+      const stockAfter = round2(product.stock + qty);
+      const patch: Partial<Product> = { stock: stockAfter, updatedAt: now };
+      // Yangi partiya narxi mahsulot tannarxiga yoziladi (faqat so'ralsa va > 0)
+      if (input.updateCost !== false && unitCost > 0) patch.cost = unitCost;
+      await db.products.update(productId, patch);
+
+      const moveId = uid();
+      // Qarz yozuvi avval — `refId` sifatida move id'sini saqlaymiz
+      let ledgerEntryId: string | null = null;
+
+      if (onCredit) {
+        const total = round2(qty * unitCost);
+        if (total > 0) {
+          const { entry } = await applyPartyEntry({
+            party: supplier,
+            direction: 'charge', // biz qarzdor bo'lamiz → supplier balansi manfiy tomonga
+            amount: total,
+            source: 'adjustment', // 'purchase' turi yo'q — adjustment + aniq izoh
+            note: note || `${product.name} × ${qty} — qarzga kirim`,
+            at: now,
+          });
+          ledgerEntryId = entry.id;
+        }
+      }
+
+      await db.moves.add({
+        id: moveId,
+        productId,
+        productName: product.name,
+        type: 'supply',
+        qty,
+        note: note || (onCredit ? 'Qarzga kirim' : 'Yetkazib beruvchidan kirim'),
+        createdAt: now,
+        supplierId,
+        unitCost,
+        ...(ledgerEntryId ? { ledgerEntryId } : {}),
+      });
+
+      await addLog(
+        'stock_move',
+        `${product.name}: +${qty} (${supplier.name}${onCredit ? ', qarzga' : ''})`,
+      );
+
+      return { moveId, ledgerEntryId, stockAfter };
+    },
+  );
+}
+
+/* ---------------------------------------------------------------------- */
 /*  Kontragentlar                                                          */
 /* ---------------------------------------------------------------------- */
 
@@ -473,10 +589,28 @@ export async function saveCustomer(rec: Customer): Promise<void> {
         await db.ledger.add(entry);
         await db.customers.put({ ...rec, balance: target });
       } else {
-        // Mavjud kontragentda qo'lda tuzatish → `adjustment` (delta)
+        /*
+         * Mavjud kontragentda qo'lda tuzatish → `adjustment` (delta).
+         *
+         * ── TUZATILGAN XATO (yetkazib beruvchi, manfiy sonlar) ────────────
+         * Ilgari yo'nalish `diff > 0 ? 'charge' : 'payment'` bilan tanlanardi.
+         * Bu MIJOZ o'qi uchun to'g'ri, yetkazib beruvchi uchun esa TESKARI:
+         * `ledgerDelta` yetkazib beruvchida `charge` ni MANFIY tomonga
+         * suradi. Natijada:
+         *
+         *   balans −5 000 → foydalanuvchi −3 000 kiritadi
+         *   diff = +2 000 → 'charge' → −5 000 + (−2 000) = −7 000  ❌
+         *
+         * Ya'ni qarzni kamaytirmoqchi bo'lgan foydalanuvchi uni oshirib
+         * yuborardi (va izohi "kamaytirish" bo'lib qolardi).
+         *
+         * Endi yo'nalish `resolveDebtDirection()` da — balans o'qiga
+         * proyeksiya orqali, `ledgerDelta` bilan bir xil matematikadan.
+         */
+        const { direction } = resolveDebtDirection(previousBalance, target, rec.kind);
         await applyPartyEntry({
           party: { ...rec, balance: previousBalance },
-          direction: diff > 0 ? 'charge' : 'payment',
+          direction,
           amount: Math.abs(diff),
           source: 'adjustment',
         });

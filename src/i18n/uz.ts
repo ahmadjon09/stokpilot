@@ -293,6 +293,76 @@ const uz: Record<string, string> = {
   'backup.restored': 'Snapshot tiklandi',
   'backup.noSnapshots': 'Snapshotlar hali yo\'q',
 
+  // ── Navigatsiya / qarzlar standarti (v5) ───────────────────────────────
+  'nav.stats': 'Statistika',
+  'nav.expand': 'Panelni kengaytirish',
+  'nav.collapse': 'Panelni yig\'ish',
+
+  'debt.netInFavor': 'bizning foydamizga',
+  'debt.netAgainst': 'bizning qarzimiz',
+  'debt.partiesCount': 'ta kontragent',
+
+  // ── Yetkazib beruvchi (mahsulot + zaxira) ──────────────────────────────
+  'supplier.pickSupplier': 'Yetkazib beruvchi',
+  'supplier.mainSupplier': 'Asosiy yetkazib beruvchi',
+  'supplier.mainSupplierHint': 'Bu mahsulotni odatda kim yetkazib beradi',
+  'supplier.newSupplier': 'Yangi yetkazib beruvchi',
+  'supplier.namePh': 'Masalan: Oq Bulut MChJ',
+  'supplier.searchPh': 'Yetkazib beruvchini qidirish',
+  'supplier.empty': 'Yetkazib beruvchi yo\'q — yuqoridagi + bilan qo\'shing',
+  'supplier.required': 'Yetkazib beruvchini tanlang',
+  'supplier.created': 'Yetkazib beruvchi qo\'shildi',
+  'supplier.sourceHint': 'Tovar qaysi yetkazib beruvchidan qabul qilinyapti',
+  'supplier.stockOnCredit': 'Boshlang\'ich qoldiqni qarzga olish',
+  'supplier.stockOnCreditHint': 'Belgilansa, qoldiq qiymati yetkazib beruvchi qarziga yoziladi',
+
+  // ── Zaxira: yetkazib beruvchidan qabul qilish ──────────────────────────
+  'stock.type.supply': 'Qabul qilish',
+  'stock.receiveTitle': 'Yetkazib beruvchidan qabul qilish',
+  'stock.unitCost': 'Dona tannarxi',
+  'stock.unitCostHint': 'Bo\'sh qoldirilsa mahsulot tannarxi olinadi',
+  'stock.onCredit': 'Qarzga qabul qilish',
+  'stock.onCreditHint': 'Belgilansa, summa yetkazib beruvchi qarziga qo\'shiladi',
+  'stock.updateCost': 'Mahsulot tannarxini yangilash',
+  'stock.updateCostHint': 'Yangi partiya narxi mahsulot tannarxi bo\'ladi',
+  'stock.addedQty': 'Qo\'shiladi',
+  'stock.supplyTotal': 'Kirim summasi',
+  'stock.willIncreaseDebt': 'Yetkazib beruvchi oldidagi qarzimiz shu summaga oshadi',
+  'stock.paidCash': 'Naqd to\'langan — qarz o\'zgarmaydi',
+  'stock.errQty': 'Miqdor 0 dan katta bo\'lishi kerak',
+
+  // ── Statistika (chuqur tahlil) ─────────────────────────────────────────
+  'stats.title': 'Statistika',
+  'stats.subtitle': 'Bugun, joriy oy va oylik tarix',
+  'stats.today': 'Bugun',
+  'stats.vsYesterday': 'kechagiga nisbatan',
+  'stats.vsPrevMonth': 'o\'tgan oyga nisbatan',
+  'stats.revenue': 'Tushum',
+  'stats.profit': 'Foyda',
+  'stats.checks': 'Cheklar',
+  'stats.avgCheck': 'O\'rtacha chek',
+  'stats.units': 'Dona',
+  'stats.margin': 'Marja',
+  'stats.creditSales': 'Nasiya',
+  'stats.monthCompare': 'Oylik taqqoslash',
+  'stats.thisMonth': 'Joriy oy',
+  'stats.rangeToday': 'Bugun',
+  'stats.rangeMonth': 'Shu oy',
+  'stats.dailyDynamics': 'Kunlik dinamika',
+  'stats.monthlyHistory': 'Oylik tarix',
+  'stats.last12': 'oxirgi 12 oy',
+  'stats.monthlyTable': 'Oylar bo\'yicha jadval',
+  'stats.month': 'Oy',
+  'stats.growth': 'O\'sish',
+  'stats.current': 'joriy',
+  'stats.noBase': 'baza yo\'q',
+
+  // ── Sozlamalar: ikki panel ─────────────────────────────────────────────
+  'settings.navDualHint': 'Tanlangan bo\'limlar pastki panelga tushadi (telefonda) va sidebar tepasida turadi. Qolgan barcha bo\'limlar sidebar\'da saqlanadi — hech narsa yo\'qolmaydi.',
+  'settings.navOrderHint': 'Tartibni o\'q bilan o\'zgartiring — pastki panel ham shu tartibda bo\'ladi.',
+  'settings.sidebarOnly': 'faqat sidebar',
+
+
   // ── Qismli / donalab qaytarish ─────────────────────────────────────────
   'sales.netAmount': 'Qaytarishdan keyingi summa',
   'sales.partial': 'Qismli qaytarilgan',

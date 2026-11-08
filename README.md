@@ -11,7 +11,7 @@ Backend yo'q — 100% client-side, barcha ma'lumot **IndexedDB** (Dexie.js) da, 
 |---|---|
 | Framework | React 18 + TypeScript (strict), Vite 5 |
 | Routing | React Router v6 — har bir modal/bottom-sheet alohida route (`/products/:id/edit`, `/sales/receipt/:id`, `/settings/storage`…). Back tugmasi sheet'ni yopadi, deep-link va refresh ishlaydi |
-| DB | Dexie.js (IndexedDB), **versiyalangan schema + migratsiya** (`db.version(1..4)`, `onupgradeneeded` ichida validatsiya/tiklash) |
+| DB | Dexie.js (IndexedDB), **versiyalangan schema + migratsiya** (`db.version(1..5)`, `onupgradeneeded` ichida validatsiya/tiklash) |
 | State | Zustand (persist) sozlamalar uchun |
 | UI | Tailwind CSS v4 + CSS-variable theme tokenlari |
 | Charts | Recharts (responsive, theme-aware) |
@@ -206,6 +206,110 @@ zaxira harakati ham yoziladi.
 - Qaytarishdan keyin chek yangilanadi (qayta ochiladi), foydalanuvchi qolgan donalarni
   darhol qaytarishi mumkin.
 
+## Qarzlar standarti — v5
+
+Butun ilovada qarz **rangi va yo'nalishi** yagona qoida bilan ko'rsatiladi
+(`src/shared/lib/debt.ts` — yagona haqiqat manbai).
+
+| Holat | Rang | Belgi | Ma'nosi |
+|---|---|---|---|
+| Mijoz bizga qarzdor | **qizil** `--debt-customer` | `+` | pul bizga kelishi kerak |
+| Biz yetkazib beruvchiga qarzdormiz | **zangor** `--debt-supplier` | `−` | pul bizdan ketishi kerak |
+| Hisob-kitob yopilgan | sokin `--debt-settled` | — | qarz yo'q |
+
+Rang "yaxshi/yomon" emas, **yo'nalish** ma'nosini beradi — shu sababli bir
+xil raqam barcha ekranda bir xil rangda ko'rinadi.
+
+### Nima tuzatildi
+
+Ilgari `DebtsPage`/`CustomersPage` mijoz qarzini **yashil**, bizning qarzni
+**qizil** ko'rsatardi; `PartySheet`/`PaymentSheet` esa teskarisini. Endi
+hammasi `debtView()` dan foydalanadi:
+
+```ts
+debtView(balance, kind) → { amount, side, color, sign, sideKey, settled }
+debtTotals(parties)     → { receivable, payable, net, debtors, creditors }
+```
+
+Yig'ma ko'rsatkichlar ham bitta funksiyadan — dashboard, mijozlar va qarzlar
+sahifasi bir xil raqam beradi.
+
+### Yetkazib beruvchi qarzini tahrirlash xatosi (tuzatildi)
+
+`saveCustomer()` yo'nalishni `diff > 0 ? 'charge' : 'payment'` bilan tanlardi.
+Bu **mijoz o'qi** uchun to'g'ri, yetkazib beruvchi uchun **teskari**:
+
+```
+balans −5 000 → foydalanuvchi −3 000 kiritadi
+diff = +2 000 → 'charge' → −5 000 + (−2 000) = −7 000   ❌ (kutilgan −3 000)
+```
+
+Endi yo'nalish `resolveDebtDirection()` da — `ledgerDelta` bilan bir xil
+matematika. Bundan tashqari `adjustDebt`/`recordPayment` `NaN`/`Infinity` ni
+rad etadi (aks holda balans `NaN` bo'lib butun daftar o'qilmay qolardi).
+
+## Yetkazib beruvchi integratsiyasi — v5
+
+### Mahsulot formasi
+
+`Product.supplierId` — asosiy yetkazib beruvchi. Formada `SupplierPicker`
+(qidiruv + **shu yerda yaratish**). Yangi mahsulotda boshlang'ich qoldiqni
+"qarzga" belgilash mumkin — qoldiq qiymati yetkazib beruvchi qarziga yoziladi.
+
+### Zaxira (kirim)
+
+`MoveForm` da yangi tur: **`supply` — yetkazib beruvchidan qabul qilish**.
+
+- majburiy: mahsulot + yetkazib beruvchi + miqdor;
+- ixtiyoriy: dona tannarxi (bo'sh bo'lsa mahsulot tannarxi), "qarzga" bayrog'i,
+  "tannarxni yangilash" bayrog'i.
+
+`supplyFromSupplier()` bitta tranzaksiyada: qoldiqni oshiradi → `moves` ga
+`type: 'supply'` yozadi (`supplierId`, `unitCost`, `ledgerEntryId`) → qarzga
+bo'lsa `ledger` ga `charge` yozadi. Ilgari kirim va qarz alohida kiritilardi va
+osongina nomuvofiqlik paydo bo'lardi.
+
+## Ikki panelli navigatsiya — v5
+
+```
+resolveBottomNav(nav)  → 3..5 element (mobil pastki panel), zaxira bilan to'ldiriladi
+resolveSidebarNav(nav) → BARCHA 9 bo'lim, tanlanganlar yuqorida
+```
+
+- **Pastki panel** sozlamalardan boshqariladi, maksimum 5 ta.
+- **Sidebar** hech qachon elementni yashirmaydi — sozlamalarda o'chirilgan
+  bo'lim ham u yerdan ochiladi. Shu tufayli "tugmalarim yo'qoldi" holati
+  bo'lmaydi.
+- Sidebar yig'iladi (`localStorage`, 240px ↔ 76px) — planshetda joy tejaydi.
+- Sozlamalarda hammasi o'chirilsa, `resolveBottomNav([])` zaxira ro'yxatini
+  qaytaradi va panel ishlashda davom etadi.
+
+## Statistika — v5
+
+`/stats` sahifasi (`src/shared/lib/analytics.ts` — sof funksiyalar):
+
+1. **Bugun** — tushum, foyda, cheklar, o'rtacha chek + kechagiga nisbatan %;
+2. **Oylik taqqoslash** — joriy oy vs o'tgan oy (tushum, foyda, cheklar farqi);
+3. **Kunlik dinamika** — tanlanadigan davr (bugun / 7 / 30 / shu oy);
+4. **Oylik tarix** — oxirgi 12 oy grafigi va jadvali (tushum, foyda, cheklar,
+   marja, o'sish %).
+
+### Kalendar arifmetikasi (muhim)
+
+Oy chegarasini `now - 30 * DAY` bilan hisoblash **noto'g'ri**: oylar 28–31 kun
+va 31-martdan bir oy oldin 28-fevral. Shuning uchun `addMonths()` mahalliy
+kalendar bilan ishlaydi (`new Date(y, m, d)`). Testda tekshirilgan:
+`31-mart − 1 oy = 1-fevral`, `yanvar − 1 oy = dekabr (o'tgan yil)`.
+
+## Migratsiya (v4 → v5)
+
+- `products.supplierId` → `''` (biriktirilmagan; taxmin qilib noto'g'ri
+  yetkazib beruvchi yozish auditni buzadi, shuning uchun ataylab bo'sh);
+- `moves.supplierId` / `moves.unitCost` — faqat mavjud bo'lsa;
+- yangi indekslar: `products.supplierId`, `moves.supplierId`,
+  `moves.[supplierId+createdAt]`;
+- **idempotent** — `repairDatabase()` qayta ishga tushirilsa natija bir xil.
+
 ## Mobil savat (POS) layouti
 
 ```
@@ -221,6 +325,6 @@ tugma doim ko'rinadi. `overscroll-behavior: contain` orqa fon "sakrashini" to'xt
 
 ## Keyingi bosqich uchun yo'nalishlar
 
-- `db.version(5)` — masalan, `sales.items` uchun alohida jadval (juda katta bazalar uchun)
+- `db.version(6)` — masalan, `sales.items` uchun alohida jadval (juda katta bazalar uchun)
 - TanStack Virtual (juda katta ro'yxatlar), exceljs/pdfmake kutubxonalari
 - Swipe amallar va pull-to-refresh kengaytmalari

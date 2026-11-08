@@ -62,7 +62,7 @@ export function strArray(v: unknown): string[] {
 /* ------------------------------- enums --------------------------------- */
 
 export const UNITS: readonly Unit[] = ['dona', 'kg', 'litr', 'metr'] as const;
-export const MOVE_TYPES: readonly MoveType[] = ['in', 'out', 'recount', 'sale', 'return'] as const;
+export const MOVE_TYPES: readonly MoveType[] = ['in', 'supply', 'out', 'recount', 'sale', 'return'] as const;
 export const PAY_TYPES: readonly PayType[] = ['cash', 'card', 'transfer', 'debt'] as const;
 export const DISCOUNT_TYPES = ['none', 'percent', 'amount'] as const;
 export const SALE_STATUSES: readonly SaleStatus[] = ['done', 'partial', 'returned'] as const;
@@ -101,6 +101,7 @@ export function validateProduct(raw: unknown, idHint?: string): Validated<Produc
     barcode: str(raw.barcode),
     note: str(raw.note),
     imageIds: strArray(raw.imageIds),
+    supplierId: str(raw.supplierId),
     createdAt: ts(raw.createdAt, now),
     updatedAt: ts(raw.updatedAt ?? raw.createdAt, now),
   };
@@ -227,6 +228,9 @@ export function validateMove(raw: unknown, idHint?: string): Validated<StockMove
     note: str(raw.note),
     createdAt: ts(raw.createdAt, Date.now()),
     ...(refId ? { refId } : {}),
+    ...(str(raw.supplierId) ? { supplierId: str(raw.supplierId) } : {}),
+    ...(Number.isFinite(num(raw.unitCost)) && num(raw.unitCost) > 0 ? { unitCost: num(raw.unitCost) } : {}),
+    ...(str(raw.ledgerEntryId) ? { ledgerEntryId: str(raw.ledgerEntryId) } : {}),
   };
   return { value: clean, changed: changedKeys(raw, clean) };
 }

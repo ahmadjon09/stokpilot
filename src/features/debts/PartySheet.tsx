@@ -5,7 +5,8 @@ import { ArrowDownLeft, ArrowUpRight, Pencil, Phone, Receipt, XCircle } from 'lu
 import { useTranslation } from 'react-i18next';
 import { db, type Customer, type LedgerEntry } from '../../db/db';
 import { deleteLedgerEntry } from '../../db/actions';
-import { ledgerStats, partyNet } from '../../db/ledger';
+import { ledgerStats } from '../../db/ledger';
+import { debtTint, debtView } from '../../shared/lib/debt';
 import { formatMoney } from '../../shared/lib/format';
 import { useCloseSheet, useOpenSheet } from '../../shared/lib/nav';
 import { buzz, toast } from '../../shared/lib/misc';
@@ -46,7 +47,7 @@ export default function PartySheet() {
   const [confirmDelete, setConfirmDelete] = useState<LedgerEntry | null>(null);
 
   const stats = useMemo(() => ledgerStats(entries ?? []), [entries]);
-  const net = partyNet(party?.balance ?? 0);
+  const view = debtView(party?.balance ?? 0, party?.kind ?? 'customer');
 
   if (party === undefined) {
     return (
@@ -121,25 +122,19 @@ export default function PartySheet() {
         {/* Joriy qarz kartasi */}
         <div
           className="mb-3 rounded-xl p-4"
-          style={{
-            background: net.settled
-              ? 'color-mix(in srgb, var(--ok) 10%, transparent)'
-              : net.theyOweUs
-                ? 'color-mix(in srgb, var(--ok) 8%, transparent)'
-                : 'color-mix(in srgb, var(--bad) 8%, transparent)',
-          }}
+          style={{ background: debtTint(view.color, view.settled ? 7 : 9) }}
         >
           <p className="text-[0.6875rem] font-semibold uppercase tracking-wide text-mute">
             {isSupplier ? t('debt.creditors') : t('debt.debtors')}
           </p>
           <p
             className="tnum mt-1 text-[1.5rem] font-extrabold leading-none"
-            style={{ color: net.settled ? 'var(--ok)' : net.theyOweUs ? 'var(--ok)' : 'var(--bad)' }}
+            style={{ color: view.color }}
           >
-            {formatMoney(net.amount)}
+            {view.settled ? formatMoney(0) : `${view.sign}${formatMoney(view.amount)}`}
           </p>
           <p className="mt-1 text-[0.8125rem] font-semibold" style={{ color: 'var(--muted)' }}>
-            {net.settled ? t('debt.settled') : net.theyOweUs ? t('debt.theyOwe') : t('debt.weOwe')}
+            {t(view.sideKey)}
           </p>
 
           {party.phone && (

@@ -6,6 +6,13 @@ import { I18nextProvider } from 'react-i18next';
 
 (globalThis as any).window = globalThis;
 (globalThis as any).document = { documentElement: { style: { setProperty(){}, }, classList: { toggle(){}, add(){}, remove(){} }, dataset: {}, lang: '' } };
+/*
+ * Recharts/theme helper'lari `getComputedStyle` dan CSS o'zgaruvchilarini
+ * o'qiydi. SSR muhitida u yo'q — bo'sh qiymat qaytaradigan stub beramiz,
+ * shunda komponentlar o'z fallback ranglariga tushadi (vizual tekshiruv
+ * preview'da qilinadi).
+ */
+(globalThis as any).getComputedStyle = () => ({ getPropertyValue: () => '' });
 
 const i18n = (await import('../src/i18n/index.ts')).default;
 const { db } = await import('../src/db/db.ts');
@@ -16,6 +23,8 @@ const LedgerTimeline = (await import('../src/features/debts/LedgerTimeline.tsx')
 const QuickCustomer = (await import('../src/features/sales/QuickCustomer.tsx')).default;
 const CustomersPage = (await import('../src/features/customers/CustomersPage.tsx')).default;
 const ReturnSheet = (await import('../src/features/sales/ReturnSheet.tsx')).default;
+const StatisticsPage = (await import('../src/features/reports/StatisticsPage.tsx')).default;
+const SupplierPicker = (await import('../src/features/customers/SupplierPicker.tsx')).default;
 
 const customer = {
   id: 'c1', name: 'Ali Valiyev', phone: '+998901112233', kind: 'customer' as const,
@@ -64,6 +73,9 @@ const cases: [string, React.ReactElement, string][] = [
     sale: { ...returnSale, status: 'returned', items: returnSale.items.map((i) => ({ ...i, returnedQty: i.qty })) } as any,
     onClose() {},
   }), '/sales'],
+  ['StatisticsPage', React.createElement(StatisticsPage), '/stats'],
+  ['SupplierPicker', React.createElement(SupplierPicker, { value: '', onChange(){} }), '/products'],
+  ['SupplierPicker (tanlangan)', React.createElement(SupplierPicker, { value: 'c1', onChange(){} }), '/products'],
   ['QuickCustomer (existing)', React.createElement(QuickCustomer, {
     value: { mode: 'existing', customerId: 'c1', name: '', phone: '', advance: null, valid: true },
     onChange() {}, total: 17000,

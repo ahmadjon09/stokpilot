@@ -27,6 +27,16 @@
   --ok: #059669;
   --warn: #d97706;
   --bad: #dc2626;
+  /*
+   * ── Qarzlar standarti (yagona rang kodi) ────────────────────────────────
+   * Qizil   — mijoz bizga qarzdor  (pul kirishi kerak)
+   * Zangor  — biz yetkazib beruvchiga qarzdormiz (pul chiqishi kerak)
+   * Sokin   — hisob-kitob yopilgan
+   * Bu ikki rang "yaxshi/yomon" emas, YO'NALISH ma'nosini beradi.
+   */
+  --debt-customer: #dc2626;
+  --debt-supplier: #2563eb;
+  --debt-settled: #6b7280;
   --radius: 8px;
   --sp: 16px;
   color-scheme: light;
@@ -41,6 +51,10 @@
   --ok: #34d399;
   --warn: #fbbf24;
   --bad: #f87171;
+  /* Qarzlar standarti — qorong'i rejimda ham kontrast yetarli */
+  --debt-customer: #f87171;
+  --debt-supplier: #60a5fa;
+  --debt-settled: #9aa1ad;
   color-scheme: dark;
 }
 html[data-font='sm'] { font-size: 14px; }

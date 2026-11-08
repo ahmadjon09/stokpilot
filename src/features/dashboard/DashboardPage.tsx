@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { AlertTriangle, Banknote, TrendingUp, Wallet } from 'lucide-react';
+import { AlertTriangle, Banknote, Building2, TrendingUp, UserRound, Wallet } from 'lucide-react';
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Line, LineChart,
   Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -12,6 +12,9 @@ import {
   countableSales, itemStats, saleNetTotal, sumNetProfit, sumNetRevenue,
 } from '../../shared/lib/salesStats';
 import { useSettings } from '../../store/settings';
+import { debtTint, debtTotals } from '../../shared/lib/debt';
+import { Link } from 'react-router-dom';
+import { periodStats, startOfMonth } from '../../shared/lib/analytics';
 import { useAccentColors } from '../../shared/lib/theme';
 
 const DAY = 86400000;
@@ -30,6 +33,36 @@ function KpiCard({ icon: Icon, label, value, tone }: {
         <p className="kpi-num truncate">{value}</p>
       </div>
     </div>
+  );
+}
+
+/**
+ * Qarz kartasi — rang standarti bo'yicha.
+ * Bosilsa qarz daftariga o'tadi (dashboard'dan to'g'ridan-to'g'ri harakat).
+ */
+function DebtCard({ to, icon: Icon, label, amount, count, note, color }: {
+  to: string; icon: typeof UserRound; label: string; amount: number;
+  count: number; note: string; color: string;
+}) {
+  if (amount <= 0) return null;
+  return (
+    <Link
+      to={to}
+      className="card flex items-center gap-3 p-3.5 transition hover:bg-card2"
+      style={{ borderColor: color, borderWidth: 1 }}
+    >
+      <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl"
+        style={{ background: debtTint(color, 14), color }}>
+        <Icon size={19} strokeWidth={1.5} />
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-[0.7188rem] font-semibold text-mute">{label}</p>
+        <p className="tnum truncate text-[1rem] font-extrabold" style={{ color }}>
+          {formatMoney(amount)}
+        </p>
+        <p className="truncate text-[0.625rem] text-mute">{note} · {count}</p>
+      </div>
+    </Link>
   );
 }
 
@@ -54,6 +87,7 @@ export default function DashboardPage() {
   const sales = useLiveQuery(() => db.sales.where('createdAt').above(Date.now() - 30 * DAY).toArray(), []) ?? [];
   const moves = useLiveQuery(() => db.moves.where('createdAt').above(Date.now() - 14 * DAY).toArray(), []) ?? [];
   const categories = useLiveQuery(() => db.categories.toArray(), []) ?? [];
+  const parties = useLiveQuery(() => db.customers.toArray(), []) ?? [];
 
   const data = useMemo(() => {
     const today = startOfDay(Date.now());
@@ -104,8 +138,20 @@ export default function DashboardPage() {
       flow.push({ label: monthShort(dayStart), inQty, outQty });
     }
 
-    return { revenueToday, profitToday, stockValue, lowCount, trend, pie, top, flow };
-  }, [products, sales, moves, categories]);
+    /*
+     * Qarzlar — yagona standart (`debtTotals`) bo'yicha. Dashboard endi
+     * mijoz qarzini (qizil) va yetkazib beruvchi qarzini (zangor) alohida
+     * ko'rsatadi. Ilgari bu ma'lumot umuman yo'q edi, shuning uchun
+     * foydalanuvchi "bugun qancha qarzim bor" ni faqat Qarzlar sahifasida
+     * ko'rardi.
+     */
+    const debts = debtTotals(parties);
+
+    // Joriy oy (bugungi kundan chuqurroq kontekst)
+    const month = periodStats(sales, startOfMonth(Date.now()), Date.now());
+
+    return { revenueToday, profitToday, stockValue, lowCount, trend, pie, top, flow, debts, month };
+  }, [products, sales, moves, categories, parties]);
 
   const tooltipStyle = {
     background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
@@ -126,13 +172,53 @@ export default function DashboardPage() {
       ) : (
         <>
           {widgets.includes('kpis') && (
-            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-              <KpiCard icon={Wallet} label={t('dash.totalStockValue')} value={formatMoney(data.stockValue)} />
-              <KpiCard icon={Banknote} label={t('dash.todaySales')} value={formatMoney(data.revenueToday)} tone="ok" />
-              <KpiCard icon={TrendingUp} label={t('dash.todayProfit')} value={formatMoney(data.profitToday)} tone="ok" />
-              <KpiCard icon={AlertTriangle} label={t('dash.lowStockItems')} value={String(data.lowCount)} tone="warn" />
-            </div>
+            <>
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                <KpiCard icon={Wallet} label={t('dash.totalStockValue')} value={formatMoney(data.stockValue)} />
+                <KpiCard icon={Banknote} label={t('dash.todaySales')} value={formatMoney(data.revenueToday)} tone="ok" />
+                <KpiCard icon={TrendingUp} label={t('dash.todayProfit')} value={formatMoney(data.profitToday)} tone="ok" />
+                <KpiCard icon={AlertTriangle} label={t('dash.lowStockItems')} value={String(data.lowCount)} tone="warn" />
+              </div>
+
+              {/* Qarzlar standarti: qizil = mijoz qarzi, zangor = bizning qarz */}
+              <div className="grid grid-cols-2 gap-3">
+                <DebtCard
+                  to="/debts"
+                  icon={UserRound}
+                  label={t('debt.totalReceivable')}
+                  amount={data.debts.receivable}
+                  count={data.debts.debtors}
+                  note={t('debt.theyOwe')}
+                  color="var(--debt-customer)"
+                />
+                <DebtCard
+                  to="/debts"
+                  icon={Building2}
+                  label={t('debt.totalPayable')}
+                  amount={data.debts.payable}
+                  count={data.debts.creditors}
+                  note={t('debt.weOwe')}
+                  color="var(--debt-supplier)"
+                />
+              </div>
+            </>
           )}
+
+          {/* Joriy oy xulosasi — "bugun" dan chuqurroq kontekst */}
+          <Link
+            to="/stats"
+            className="card flex flex-wrap items-center justify-between gap-2 p-3 transition hover:bg-card2"
+          >
+            <span className="flex items-center gap-2 text-[0.8125rem] font-bold">
+              <TrendingUp size={15} strokeWidth={1.5} className="text-accent" />
+              {t('stats.thisMonth')}
+            </span>
+            <span className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.75rem]">
+              <span className="text-mute">{t('stats.revenue')}: <b className="tnum" style={{ color: 'var(--text)' }}>{formatMoney(data.month.revenue)}</b></span>
+              <span className="text-mute">{t('stats.profit')}: <b className="tnum" style={{ color: 'var(--ok)' }}>{formatMoney(data.month.profit)}</b></span>
+              <span className="text-mute">{t('stats.checks')}: <b className="tnum" style={{ color: 'var(--text)' }}>{data.month.checks}</b></span>
+            </span>
+          </Link>
 
           <div className="grid gap-4 lg:grid-cols-2">
             {widgets.includes('trend') && (

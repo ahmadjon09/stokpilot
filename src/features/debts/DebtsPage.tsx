@@ -3,8 +3,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { Building2, ChevronRight, HandCoins, Search, UserRound, Wallet } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { db, type Customer } from '../../db/db';
-import { partyNet } from '../../db/ledger';
-import { formatMoney, round2 } from '../../shared/lib/format';
+import { debtTotals, debtTint, debtView } from '../../shared/lib/debt';
+import { formatMoney } from '../../shared/lib/format';
 import { EmptyState, Segmented } from '../../shared/ui/bits';
 import { useOpenSheet } from '../../shared/lib/nav';
 import { buzz } from '../../shared/lib/misc';
@@ -13,7 +13,7 @@ type Filter = 'all' | 'customer' | 'supplier';
 
 interface Row {
   party: Customer;
-  net: ReturnType<typeof partyNet>;
+  view: ReturnType<typeof debtView>;
 }
 
 /**
@@ -32,7 +32,7 @@ export default function DebtsPage() {
   const customers = useLiveQuery(() => db.customers.toArray(), []);
 
   const all: Row[] = useMemo(() => {
-    const list = (customers ?? []).map((party) => ({ party, net: partyNet(party.balance) }));
+    const list = (customers ?? []).map((party) => ({ party, view: debtView(party.balance, party.kind) }));
     const s = q.trim().toLowerCase();
     return list
       .filter((r) => {
@@ -42,23 +42,17 @@ export default function DebtsPage() {
       })
       // Qarzdorlar yuqorida, qarz summasi bo'yicha kamayish tartibida
       .sort((a, b) => {
-        if (a.net.settled !== b.net.settled) return a.net.settled ? 1 : -1;
-        return b.net.amount - a.net.amount;
+        if (a.view.settled !== b.view.settled) return a.view.settled ? 1 : -1;
+        return b.view.amount - a.view.amount;
       });
   }, [customers, filter, q]);
 
-  /** Sof pozitsiya — faqat qarzi bor kontragentlar hisobga olinadi */
-  const totals = useMemo(() => {
-    let receivable = 0; // bizga qarzdor
-    let payable = 0; // biz qarzdormiz
-    for (const c of customers ?? []) {
-      const n = partyNet(c.balance);
-      if (n.settled) continue;
-      if (n.theyOweUs) receivable = round2(receivable + n.amount);
-      else payable = round2(payable + n.amount);
-    }
-    return { receivable, payable, net: round2(receivable - payable) };
-  }, [customers]);
+  /**
+   * Sof pozitsiya — YAGONA `debtTotals()` funksiyasidan (CustomersPage,
+   * Dashboard ham shundan foydalanadi). Ilgari har bir sahifa o'z siklini
+   * yozardi va natijalar farq qilardi.
+   */
+  const totals = useMemo(() => debtTotals(customers ?? []), [customers]);
 
   const openParty = (id: string) => { buzz(6); openSheet(`/debts/${id}`); };
 
@@ -76,19 +70,24 @@ export default function DebtsPage() {
           </span>
           <span
             className="tnum text-[1.125rem] font-extrabold"
-            style={{ color: totals.net >= 0 ? 'var(--ok)' : 'var(--bad)' }}
+            style={{ color: totals.net >= 0 ? 'var(--debt-customer)' : 'var(--debt-supplier)' }}
           >
             {formatMoney(Math.abs(totals.net))}
+            <span className="ml-1 text-[0.625rem] font-medium text-mute">
+              {totals.net > 0 ? t('debt.netInFavor') : totals.net < 0 ? t('debt.netAgainst') : ''}
+            </span>
           </span>
         </div>
         <div className="mt-2.5 grid grid-cols-2 gap-2">
           <div className="rounded-lg px-2.5 py-2" style={{ background: 'var(--surface2)' }}>
             <p className="text-[0.625rem] font-semibold uppercase tracking-wide text-mute">{t('debt.totalReceivable')}</p>
-            <p className="tnum mt-0.5 text-[0.875rem] font-bold" style={{ color: 'var(--ok)' }}>{formatMoney(totals.receivable)}</p>
+            <p className="tnum mt-0.5 text-[0.875rem] font-bold" style={{ color: 'var(--debt-customer)' }}>{formatMoney(totals.receivable)}</p>
+            <p className="text-[0.5937rem] text-mute">{totals.debtors} {t('debt.partiesCount')}</p>
           </div>
           <div className="rounded-lg px-2.5 py-2" style={{ background: 'var(--surface2)' }}>
             <p className="text-[0.625rem] font-semibold uppercase tracking-wide text-mute">{t('debt.totalPayable')}</p>
-            <p className="tnum mt-0.5 text-[0.875rem] font-bold" style={{ color: 'var(--bad)' }}>{formatMoney(totals.payable)}</p>
+            <p className="tnum mt-0.5 text-[0.875rem] font-bold" style={{ color: 'var(--debt-supplier)' }}>{formatMoney(totals.payable)}</p>
+            <p className="text-[0.5937rem] text-mute">{totals.creditors} {t('debt.partiesCount')}</p>
           </div>
         </div>
       </div>
@@ -131,7 +130,7 @@ export default function DebtsPage() {
         </div>
       ) : (
         <div className="card row-list overflow-hidden">
-          {all.map(({ party, net }) => (
+          {all.map(({ party, view }) => (
             <button
               key={party.id}
               type="button"
@@ -141,11 +140,11 @@ export default function DebtsPage() {
             >
               <span
                 className="flex h-10 w-10 flex-none items-center justify-center rounded-full"
-                style={{ background: 'var(--accent-soft)' }}
+                style={{ background: debtTint(view.color, 14), color: view.color }}
               >
                 {party.kind === 'customer'
-                  ? <UserRound size={17} strokeWidth={1.5} className="text-accent" />
-                  : <Building2 size={17} strokeWidth={1.5} className="text-accent" />}
+                  ? <UserRound size={17} strokeWidth={1.5} />
+                  : <Building2 size={17} strokeWidth={1.5} />}
               </span>
 
               <span className="min-w-0 flex-1">
@@ -153,16 +152,16 @@ export default function DebtsPage() {
                 <span className="block truncate text-[0.75rem] text-mute">
                   {party.phone || t('customers.kind.' + party.kind)}
                   {' · '}
-                  {net.settled ? t('debt.settled') : net.theyOweUs ? t('debt.theyOwe') : t('debt.weOwe')}
+                  {t(view.sideKey)}
                 </span>
               </span>
 
               <span className="flex-none text-right">
                 <span
                   className="tnum block text-[0.9375rem] font-extrabold"
-                  style={{ color: net.settled ? 'var(--ok)' : net.theyOweUs ? 'var(--ok)' : 'var(--bad)' }}
+                  style={{ color: view.color }}
                 >
-                  {net.settled ? '—' : formatMoney(net.amount)}
+                  {view.settled ? '—' : `${view.sign}${formatMoney(view.amount)}`}
                 </span>
               </span>
               <ChevronRight size={17} strokeWidth={1.5} className="flex-none text-mute" />

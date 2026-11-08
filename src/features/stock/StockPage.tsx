@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowDownToLine, ArrowUpFromLine, ClipboardCheck, Receipt, RotateCcw, Search, Wallet } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, Building2, ClipboardCheck, Receipt, RotateCcw, Search, Wallet } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { db, type MoveType } from '../../db/db';
 import { formatDateTime, formatMoney, formatNumber } from '../../shared/lib/format';
@@ -9,6 +9,7 @@ import { useOpenSheet } from '../../shared/lib/nav';
 
 const MOVE_ICON: Record<MoveType, typeof ArrowDownToLine> = {
   in: ArrowDownToLine,
+  supply: Building2,
   out: ArrowUpFromLine,
   recount: ClipboardCheck,
   sale: Receipt,
@@ -17,6 +18,8 @@ const MOVE_ICON: Record<MoveType, typeof ArrowDownToLine> = {
 
 const MOVE_COLOR: Record<MoveType, string> = {
   in: 'var(--ok)',
+  // Qarzga kirim — zangor (biz yetkazib beruvchiga qarzdormiz)
+  supply: 'var(--debt-supplier)',
   out: 'var(--bad)',
   recount: 'var(--warn)',
   sale: 'var(--accent)',
@@ -30,6 +33,7 @@ export default function StockPage() {
   const [q, setQ] = useState('');
 
   const products = useLiveQuery(() => db.products.toArray(), []) ?? [];
+  const suppliers = useLiveQuery(() => db.customers.where('kind').equals('supplier').toArray(), []) ?? [];
   const moves = useLiveQuery(() => db.moves.orderBy('createdAt').reverse().limit(300).toArray(), []) ?? [];
 
   const stats = useMemo(() => {
@@ -45,6 +49,12 @@ export default function StockPage() {
       .sort((a, b) => a.stock / Math.max(a.minStock, 1) - b.stock / Math.max(b.minStock, 1));
   }, [products, q]);
 
+  /** supplierId → nom (harakatlar ro'yxatida manbani ko'rsatish uchun) */
+  const supplierName = useMemo(
+    () => new Map(suppliers.map((x) => [x.id, x.name])),
+    [suppliers],
+  );
+
   const filteredMoves = useMemo(() => {
     const s = q.trim().toLowerCase();
     return moves.filter((m) => !s || m.productName.toLowerCase().includes(s));
@@ -52,8 +62,11 @@ export default function StockPage() {
 
   return (
     <div className="space-y-3">
-      <div className="hidden md:block">
+      <div className="hidden md:flex md:items-center md:justify-between">
         <h1 className="text-[1.375rem] font-extrabold tracking-tight">{t('stock.title')}</h1>
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => openSheet('/stock/new')}>
+          {t('stock.newMove')}
+        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
@@ -126,7 +139,9 @@ export default function StockPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[0.875rem] font-semibold">{m.productName}</p>
                   <p className="truncate text-[0.75rem] text-mute">
-                    {t('stock.type.' + m.type)}{m.note ? ` · ${m.note}` : ''} · {formatDateTime(m.createdAt)}
+                    {t('stock.type.' + m.type)}
+                    {m.supplierId && supplierName.get(m.supplierId) ? ` · ${supplierName.get(m.supplierId)}` : ''}
+                    {m.note ? ` · ${m.note}` : ''} · {formatDateTime(m.createdAt)}
                   </p>
                 </div>
                 <span className="tnum flex-none text-[0.9062rem] font-bold" style={{ color: m.qty >= 0 ? 'var(--ok)' : 'var(--bad)' }}>

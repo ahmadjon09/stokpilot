@@ -5,7 +5,7 @@ import { Camera, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { db, uid, nextSku, type Product, type Unit } from '../../db/db';
 import { round2 } from '../../shared/lib/format';
-import { deleteProduct } from '../../db/actions';
+import { adjustDebt, deleteProduct } from '../../db/actions';
 import { processImageFile } from '../../shared/lib/img';
 import { useSettings } from '../../store/settings';
 import { useCloseSheet, useOpenSheet } from '../../shared/lib/nav';
@@ -13,6 +13,7 @@ import { buzz, toast } from '../../shared/lib/misc';
 import Sheet from '../../shared/ui/Sheet';
 import NumberInput from '../../shared/ui/NumberInput';
 import { ConfirmDialog, Field } from '../../shared/ui/bits';
+import SupplierPicker from '../customers/SupplierPicker';
 
 const DRAFT_KEY = 'sp-draft-product-new';
 const LAST_CAT_KEY = 'sp-last-category';
@@ -29,6 +30,9 @@ interface FormState {
   minStock: number | null;
   barcode: string;
   note: string;
+  supplierId: string;
+  /** Yangi mahsulotda boshlang'ich qoldiqni yetkazib beruvchi qarziga yozish */
+  stockOnCredit: boolean;
 }
 
 export default function ProductFormSheet() {
@@ -48,6 +52,7 @@ export default function ProductFormSheet() {
   const [form, setForm] = useState<FormState>({
     name: '', price: null, cost: null, categoryId: '', newCategory: '',
     sku: '', unit: 'dona', stock: null, minStock: null, barcode: '', note: '',
+    supplierId: '', stockOnCredit: false,
   });
   const [newImages, setNewImages] = useState<{ id: string; data: string; thumb: string; size: number }[]>([]);
   const [errors, setErrors] = useState<{ name?: string; price?: string }>({});
@@ -68,6 +73,7 @@ export default function ProductFormSheet() {
         categoryId: products.categoryId, newCategory: '', sku: products.sku,
         unit: products.unit, stock: products.stock, minStock: products.minStock,
         barcode: products.barcode, note: products.note,
+        supplierId: products.supplierId ?? '', stockOnCredit: false,
       });
     } else {
       loadedRef.current = true;
@@ -142,10 +148,34 @@ export default function ProductFormSheet() {
         barcode: form.barcode.trim(),
         note: form.note.trim(),
         imageIds: [...(existing?.imageIds ?? []), ...newImages.map((i) => i.id)],
+        supplierId: form.supplierId,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       };
       await db.products.put(product);
+
+      /*
+       * Boshlang'ich qoldiq yetkazib beruvchidan olingan bo'lsa va
+       * foydalanuvchi "qarzga" belgilagan bo'lsa — qarzni ham yozamiz.
+       * Bu `supplyFromSupplier` bilan bir xil mantiq, lekin mahsulot
+       * hozir yaratilgani uchun qoldiq allaqachon o'rnatilgan — shuning
+       * uchun faqat qarz qismini atomar qo'shamiz (qoldiqni ikki marta
+       * oshirib yubormaslik uchun).
+       */
+      if (!existing && form.stockOnCredit && form.supplierId && (form.stock ?? 0) > 0) {
+        const supplier = await db.customers.get(form.supplierId);
+        if (supplier && supplier.kind === 'supplier') {
+          const total = round2((form.stock ?? 0) * (form.cost ?? 0));
+          if (total > 0) {
+            await adjustDebt({
+              partyId: supplier.id,
+              amount: total,
+              direction: 'charge',
+              note: `${product.name} — boshlang'ich qoldiq (qarzga)`,
+            });
+          }
+        }
+      }
 
       // Qoldiq qo'lda o'zgartirilsa — audit uchun harakat yozuvi
       const delta = round2(nextStock - prevStock);
@@ -255,6 +285,31 @@ export default function ProductFormSheet() {
           </div>
         )}
       </Field>
+
+      {/* Yetkazib beruvchi — mahsulot kartochkasiga biriktiriladi */}
+      <SupplierPicker
+        value={form.supplierId}
+        onChange={(v) => set('supplierId', v)}
+        label={t('supplier.mainSupplier')}
+        hint={t('supplier.mainSupplierHint')}
+      />
+
+      {/* Boshlang'ich qoldiqni qarzga olish (faqat yangi mahsulotda) */}
+      {!isEdit && form.supplierId && (form.stock ?? 0) > 0 && (
+        <label className="mb-3 flex items-start gap-2.5 rounded-lg border border-line p-2.5"
+          style={{ background: 'var(--surface2)', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            className="mt-0.5 h-5 w-5 flex-none accent-[var(--accent)]"
+            checked={form.stockOnCredit}
+            onChange={(e) => set('stockOnCredit', e.target.checked)}
+          />
+          <span className="min-w-0">
+            <span className="block text-[0.8125rem] font-semibold">{t('supplier.stockOnCredit')}</span>
+            <span className="block text-[0.6875rem] leading-snug text-mute">{t('supplier.stockOnCreditHint')}</span>
+          </span>
+        </label>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <Field label={t('products.stock')} hint={isEdit ? t('products.stockHintEdit') : t('products.stockHintNew')}>
