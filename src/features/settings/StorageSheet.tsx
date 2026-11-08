@@ -19,6 +19,7 @@ const TABLE_LABELS: Record<string, string> = {
   sales: 'Sales',
   moves: 'StockMoves',
   customers: 'Customers',
+  ledger: 'DebtLedger',
   images: 'Images',
   logs: 'Logs',
   categories: 'Categories',
@@ -39,7 +40,7 @@ export default function StorageSheet() {
   const [confirmWipe, setConfirmWipe] = useState(false);
 
   const measure = useCallback(async () => {
-    const names = ['products', 'sales', 'moves', 'customers', 'images', 'logs', 'categories', 'snapshots'] as const;
+    const names = ['products', 'sales', 'moves', 'customers', 'ledger', 'images', 'logs', 'categories', 'snapshots'] as const;
     const out: TableStat[] = [];
     for (const n of names) {
       const rows = await db.table(n).toArray();

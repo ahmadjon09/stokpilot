@@ -6,11 +6,11 @@ import { db } from './db';
 export async function wipeAll(): Promise<void> {
   await db.transaction(
     'rw',
-    [db.products, db.categories, db.customers, db.sales, db.moves, db.logs, db.images, db.snapshots],
+    [db.products, db.categories, db.customers, db.ledger, db.sales, db.moves, db.logs, db.images, db.snapshots],
     async () => {
       await Promise.all([
         db.products.clear(), db.categories.clear(), db.customers.clear(),
-        db.sales.clear(), db.moves.clear(), db.logs.clear(),
+        db.ledger.clear(), db.sales.clear(), db.moves.clear(), db.logs.clear(),
         db.images.clear(), db.snapshots.clear(),
       ]);
     }

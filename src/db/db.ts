@@ -1,5 +1,5 @@
 import Dexie, { type Table, type Transaction } from 'dexie';
-import { migrateV1toV2, type MigrationReport } from './migrations';
+import { migrateV1toV2, migrateV2toV3, type MigrationReport } from './migrations';
 
 export type Unit = 'dona' | 'kg' | 'litr' | 'metr';
 
@@ -68,6 +68,10 @@ export interface Sale {
   total: number;
   costTotal: number;
   payType: PayType;
+  /** Darhol to'langan qism (nasiyada — avans). Nasiya bo'lmagan sotuvda = total */
+  paidAmount: number;
+  /** Qarzga yozilgan qism (nasiya). Nasiya bo'lmasa = 0 */
+  debtAmount: number;
   customerId: string;
   customerName: string;
   status: 'done' | 'returned';
@@ -80,8 +84,59 @@ export interface Customer {
   name: string;
   phone: string;
   kind: 'customer' | 'supplier';
-  balance: number; // >0 — mijoz qarzdor / biz yetkazib beruvchiga qarzdormiz
+  /**
+   * Imzolangan balans (yagona konvensiya, ikkala tur uchun ham):
+   *   balance > 0 — kontragent BIZGA qarzdor;
+   *   balance < 0 — BIZ kontragentga qarzdormiz.
+   *
+   * Bu qiymat `ledger` jadvalidagi yozuvlar yig'indisidan hosil bo'ladi
+   * (kэш/tez o'qish uchun saqlanadi). Qo'lda o'zgartirilmaydi — barcha
+   * o'zgarishlar `applyPartyEntry()` orqali, tarix bilan birga yoziladi.
+   *
+   * Tabiiy ko'rinish uchun `partyNet()` helper'idan foydalaning:
+   *   mijoz  uchun net =  balance  (musbat — u qarzdor)
+   *   yetkazib beruvchi uchun net = -balance (musbat — biz qarzdormiz)
+   */
+  balance: number;
   note: string;
+  createdAt: number;
+}
+
+/* ----------------------------------------------------------------------- */
+/*  Qarz daftari (ledger) — mijoz va yetkazib beruvchi bilan hisob-kitoblar */
+/* ----------------------------------------------------------------------- */
+
+/** Yozuv manbasi — tarixda ikonka/rang va izoh uchun */
+export type LedgerSource = 'opening' | 'sale' | 'payment' | 'return' | 'adjustment';
+
+/**
+ * Qarz harakati yo'nalishi:
+ *  - `charge`  — qarz OSHDI (mijoz nasiyaga oldi / biz yetkazib beruvchidan
+ *                qarzga tovar oldik);
+ *  - `payment` — qarz KAMAYDI (mijoz to'ladi / biz yetkazib beruvchiga to'ladik).
+ *
+ * `amount` doim musbat; balansga ta'siri `ledgerDelta()` bilan hisoblanadi.
+ */
+export type LedgerDirection = 'charge' | 'payment';
+
+export interface LedgerEntry {
+  id: string;
+  /** Customer.id */
+  partyId: string;
+  /** Denormalizatsiya — bo'lak bo'yicha tez filtr (kind o'zgarsa ham tarix saqlanadi) */
+  partyKind: 'customer' | 'supplier';
+  direction: LedgerDirection;
+  source: LedgerSource;
+  /** Harakat summasi — doim musbat */
+  amount: number;
+  /** Yozuvdan keyingi imzolangan balans (Customer.balance bilan bir xil shkala) */
+  balanceAfter: number;
+  note: string;
+  /** To'lov usuli (faqat payment uchun) */
+  method: PayType | '';
+  /** Sotuvga bog'langan bo'lsa */
+  saleId?: string;
+  saleNumber?: number;
   createdAt: number;
 }
 
@@ -106,7 +161,7 @@ export interface Snapshot {
  * Dexie eski versiyalardagi `.stores()` ta'riflarini o'zi saqlab qoladi —
  * shuning uchun eski bloklarni o'chirib tashlamang.
  */
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 class StokPilotDB extends Dexie {
   products!: Table<Product, string>;
@@ -115,6 +170,7 @@ class StokPilotDB extends Dexie {
   moves!: Table<StockMove, string>;
   sales!: Table<Sale, string>;
   customers!: Table<Customer, string>;
+  ledger!: Table<LedgerEntry, string>;
   logs!: Table<LogRec, string>;
   snapshots!: Table<Snapshot, string>;
 
@@ -140,7 +196,7 @@ class StokPilotDB extends Dexie {
     // Yangi indekslar: barcode (POS tez qidiruv), moves.type / refId
     // (hisobot va chek tarixi uchun), sales.status (qaytarilganlarni filtrlash),
     // logs.action (audit filtri).
-    this.version(DB_VERSION).stores({
+    this.version(2).stores({
       products: 'id, name, sku, categoryId, barcode, updatedAt',
       categories: 'id, name',
       images: 'id, productId',
@@ -152,6 +208,30 @@ class StokPilotDB extends Dexie {
     }).upgrade(async (tx) => {
       // Upgrade ichida faqat `tx.table(...)` ishlatiladi (db.* emas!)
       this.lastMigration = await migrateV1toV2(tx);
+    });
+
+    // ── v3 — qarz daftari (ledger) + nasiya/avans ajratmasi ─────────────
+    // `ledger` — mijoz va yetkazib beruvchi bilan har bir hisob-kitob yozuvi
+    // (qarz oshishi, to'lov, qaytarish, tuzatish). `balanceAfter` har bir
+    // yozuvdagi qoldiqni saqlaydi → tarixni istalgan paytdan tiklash mumkin.
+    //
+    // Indekslar:
+    //   partyId                       — kontragent bo'yicha barcha yozuvlar
+    //   [partyId+createdAt]           — xronologik tarix (kompaund)
+    //   partyKind+createdAt           — "barcha qarzlar" ekrani uchun
+    //   saleId                        — chekdan qarzga o'tish
+    this.version(DB_VERSION).stores({
+      products: 'id, name, sku, categoryId, barcode, updatedAt',
+      categories: 'id, name',
+      images: 'id, productId',
+      moves: 'id, productId, createdAt, type, refId',
+      sales: 'id, createdAt, number, customerId, status, payType',
+      customers: 'id, name, kind',
+      ledger: 'id, partyId, createdAt, [partyId+createdAt], partyKind, [partyKind+createdAt], saleId',
+      logs: 'id, createdAt, action',
+      snapshots: 'id, createdAt',
+    }).upgrade(async (tx) => {
+      this.lastMigration = await migrateV2toV3(tx);
     });
   }
 }
@@ -256,12 +336,13 @@ async function recoverDatabase(error: unknown): Promise<OpenResult> {
       moves: 'id, productId, createdAt, type, refId',
       sales: 'id, createdAt, number, customerId, status, payType',
       customers: 'id, name, kind',
+      ledger: 'id, partyId, createdAt, [partyId+createdAt], partyKind, [partyKind+createdAt], saleId',
       logs: 'id, createdAt, action',
       snapshots: 'id, createdAt',
     });
     // Buzilgan yozuvlar `toArray()` da xato berishi mumkin — jadval bo'yicha alohida
     const out: Record<string, unknown[]> = {};
-    for (const t of ['categories', 'products', 'images', 'moves', 'sales', 'customers', 'logs', 'snapshots']) {
+    for (const t of ['categories', 'products', 'images', 'moves', 'sales', 'customers', 'ledger', 'logs', 'snapshots']) {
       try {
         out[t] = await raw.table(t).toArray();
       } catch {
@@ -326,7 +407,7 @@ export async function repairDatabase(): Promise<MigrationReport> {
   await db.open();
   return db.transaction(
     'rw',
-    [db.products, db.categories, db.images, db.moves, db.sales, db.customers, db.logs],
-    (tx: Transaction) => migrateV1toV2(tx),
+    [db.products, db.categories, db.images, db.moves, db.sales, db.customers, db.ledger, db.logs],
+    (tx: Transaction) => migrateV2toV3(tx),
   );
 }

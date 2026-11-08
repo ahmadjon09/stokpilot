@@ -138,6 +138,23 @@ export default function ReceiptSheet() {
             <span className="tnum">{formatMoney(sale.total)}</span>
           </div>
           <div className="flex justify-between text-mute"><span>{t('sales.payType')}</span><span>{payLabel}</span></div>
+          {/* Nasiya: to'langan qism va qarzga yozilgan qism */}
+          {sale.payType === 'debt' && (
+            <>
+              {sale.paidAmount > 0 && (
+                <div className="flex justify-between">
+                  <span>{t('quickCust.advance')}</span>
+                  <span className="tnum" style={{ color: 'var(--ok)' }}>{formatMoney(sale.paidAmount)}</span>
+                </div>
+              )}
+              {sale.debtAmount > 0 && (
+                <div className="flex justify-between font-semibold">
+                  <span>{t('quickCust.debtWillBe')}</span>
+                  <span className="tnum" style={{ color: 'var(--bad)' }}>{formatMoney(sale.debtAmount)}</span>
+                </div>
+              )}
+            </>
+          )}
           {sale.customerName && (
             <div className="flex justify-between text-mute"><span>{t('sales.customer')}</span><span>{sale.customerName}</span></div>
           )}

@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "check:migrations": "tsx scripts/migration-check.mts",
     "check:nav": "tsx scripts/nav-check.mts",
-    "check": "npm run check:migrations && npm run check:nav && tsc --noEmit"
+    "check": "npm run check:migrations && npm run check:ledger && npm run check:nav && npm run check:render && tsc --noEmit",
+    "check:ledger": "tsx scripts/ledger-check.mts",
+    "check:render": "tsx scripts/render-check.mts"
   },
   "dependencies": {
     "dexie": "^4.0.8",

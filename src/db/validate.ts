@@ -12,9 +12,11 @@
  * ilovani yiqitmaydi.
  */
 
+import { round2 } from '../shared/lib/format';
 import {
-  type Category, type Customer, type ImageRec, type LogRec, type MoveType,
-  type PayType, type Product, type Sale, type SaleItem, type StockMove, type Unit,
+  type Category, type Customer, type ImageRec, type LedgerDirection, type LedgerEntry,
+  type LedgerSource, type LogRec, type MoveType, type PayType, type Product, type Sale,
+  type SaleItem, type StockMove, type Unit,
 } from './db';
 
 /* ------------------------------- helpers ------------------------------- */
@@ -64,6 +66,10 @@ export const PAY_TYPES: readonly PayType[] = ['cash', 'card', 'transfer', 'debt'
 export const DISCOUNT_TYPES = ['none', 'percent', 'amount'] as const;
 export const SALE_STATUSES = ['done', 'returned'] as const;
 export const CUSTOMER_KINDS = ['customer', 'supplier'] as const;
+export const LEDGER_DIRECTIONS: readonly LedgerDirection[] = ['charge', 'payment'] as const;
+export const LEDGER_SOURCES: readonly LedgerSource[] = ['opening', 'sale', 'payment', 'return', 'adjustment'] as const;
+/** To'lov usullari — '' (ko'rsatilmagan) ham ruxsat etiladi */
+export const LEDGER_METHODS: readonly (PayType | '')[] = ['', 'cash', 'card', 'transfer', 'debt'] as const;
 
 /* ------------------------------ validators ----------------------------- */
 
@@ -133,6 +139,18 @@ export function validateSale(raw: unknown, idHint?: string): Validated<Sale> {
 
   const subtotal = num(raw.subtotal, itemsSum);
   const total = num(raw.total, subtotal);
+  const payType = oneOf(raw.payType, PAY_TYPES, 'cash');
+
+  /*
+   * paidAmount / debtAmount — v3 da qo'shildi.
+   * Legacy (v1/v2) chekda bu maydonlar yo'q: ular payType dan xulosa qilinadi.
+   *   - nasiya (debt): butun summa qarzga yozilgan → paid 0, debt total
+   *   - boshqa turlar: to'liq to'langan → paid total, debt 0
+   */
+  const legacyDebt = payType === 'debt' ? Math.abs(total) : 0;
+  const legacyPaid = round2(total - legacyDebt);
+  const debtAmount = Math.min(Math.abs(num(raw.debtAmount, legacyDebt)), Math.abs(total));
+  const paidAmount = round2(num(raw.paidAmount, legacyPaid));
 
   const clean: Sale = {
     id,
@@ -143,7 +161,9 @@ export function validateSale(raw: unknown, idHint?: string): Validated<Sale> {
     discountValue: num(raw.discountValue),
     total,
     costTotal: num(raw.costTotal),
-    payType: oneOf(raw.payType, PAY_TYPES, 'cash'),
+    payType,
+    paidAmount,
+    debtAmount,
     customerId: str(raw.customerId),
     customerName: str(raw.customerName),
     status: oneOf(raw.status, SALE_STATUSES, 'done'),
@@ -154,6 +174,10 @@ export function validateSale(raw: unknown, idHint?: string): Validated<Sale> {
   return { value: clean, changed: itemsDropped || changedKeys(raw, clean) };
 }
 
+/**
+ * Kontragent (mijoz yoki yetkazib beruvchi).
+ * `balance` imzolangan: >0 — u bizga qarzdor, <0 — biz u bilan qarzdormiz.
+ */
 export function validateCustomer(raw: unknown, idHint?: string): Validated<Customer> {
   if (!isDict(raw)) return { value: null, changed: true };
   const id = str(raw.id, idHint ?? '');
@@ -223,6 +247,36 @@ export function validateLog(raw: unknown, idHint?: string): Validated<LogRec> {
     message: str(raw.message),
     createdAt: ts(raw.createdAt, Date.now()),
   };
+  return { value: clean, changed: changedKeys(raw, clean) };
+}
+
+export function validateLedgerEntry(raw: unknown, idHint?: string): Validated<LedgerEntry> {
+  if (!isDict(raw)) return { value: null, changed: true };
+  const id = str(raw.id, idHint ?? '');
+  const partyId = str(raw.partyId);
+  // Kontragentsiz yozuv ma'nosiz — uni tashlab yuboramiz
+  if (!id || !partyId) return { value: null, changed: true };
+
+  const saleId = str(raw.saleId);
+  const saleNumber = Math.trunc(num(raw.saleNumber));
+  const method = oneOf(raw.method, LEDGER_METHODS, '');
+
+  const clean: LedgerEntry = {
+    id,
+    partyId,
+    partyKind: oneOf(raw.partyKind, CUSTOMER_KINDS, 'customer'),
+    direction: oneOf(raw.direction, LEDGER_DIRECTIONS, 'charge'),
+    source: oneOf(raw.source, LEDGER_SOURCES, 'adjustment'),
+    // Summa doim musbat — yo'nalish `direction` da ifodalanadi
+    amount: Math.abs(num(raw.amount)),
+    balanceAfter: num(raw.balanceAfter),
+    note: str(raw.note),
+    method,
+    ...(saleId ? { saleId } : {}),
+    ...(saleId && Number.isFinite(saleNumber) && saleNumber > 0 ? { saleNumber } : {}),
+    createdAt: ts(raw.createdAt, Date.now()),
+  };
+
   return { value: clean, changed: changedKeys(raw, clean) };
 }
 

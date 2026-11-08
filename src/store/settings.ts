@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 
 export type Lang = 'uz' | 'ru';
 export type ThemeMode = 'light' | 'dark' | 'system';
-export type NavKey = 'dashboard' | 'products' | 'sales' | 'stock' | 'customers' | 'reports' | 'settings';
+export type NavKey = 'dashboard' | 'products' | 'sales' | 'stock' | 'customers' | 'debts' | 'reports' | 'settings';
 export type WidgetKey = 'kpis' | 'trend' | 'categories' | 'top' | 'flow';
 
 export const ACCENTS: Record<string, string> = {

@@ -11,7 +11,7 @@ Backend yo'q — 100% client-side, barcha ma'lumot **IndexedDB** (Dexie.js) da, 
 |---|---|
 | Framework | React 18 + TypeScript (strict), Vite 5 |
 | Routing | React Router v6 — har bir modal/bottom-sheet alohida route (`/products/:id/edit`, `/sales/receipt/:id`, `/settings/storage`…). Back tugmasi sheet'ni yopadi, deep-link va refresh ishlaydi |
-| DB | Dexie.js (IndexedDB), **versiyalangan schema + migratsiya** (`db.version(1..2)`, `onupgradeneeded` ichida validatsiya/tiklash) |
+| DB | Dexie.js (IndexedDB), **versiyalangan schema + migratsiya** (`db.version(1..3)`, `onupgradeneeded` ichida validatsiya/tiklash) |
 | State | Zustand (persist) sozlamalar uchun |
 | UI | Tailwind CSS v4 + CSS-variable theme tokenlari |
 | Charts | Recharts (responsive, theme-aware) |
@@ -26,7 +26,9 @@ npm install
 npm run build      # tsc strict + vite build
 npm run preview    # production preview (SW bilan offline)
 npm run dev        # dev server
-npm run check      # migratsiya + navigatsiya smoke-testlari + tsc
+npm run check          # migratsiya + ledger + navigatsiya + render + tsc
+npm run check:ledger   # qarz daftari business-logic (33 ta tekshiruv)
+npm run check:render   # yangi UI komponentlarining render smoke-testi
 ```
 
 ## Ma'lumotlar xavfsizligi (migratsiya)
@@ -57,7 +59,8 @@ Xotira bo'limida qo'lda "Ma'lumotlarni tekshirish" (`repairDatabase`) tugmasi bo
 - **Mahsulotlar** — SKU, kategoriya, birlik, tannarx/narx, min. qoldiq, shtrix-kod, ko'p rasm (canvas resize 1200px + WebP/JPEG q=0.8, thumbnail 200px alohida store'da), qidiruv/filtr/saralash, bulk o'chirish, progressive disclosure forma, autosave draft, aqlli defaultlar (oxirgi kategoriya, SKU avtogeneratsiya).
 - **Zaxira** — kirim / chiqim / inventarizatsiya (recount), audit-log (har bir harakat `moves` jadvalida, nom snapshot bilan).
 - **Sotuv (POS)** — tez savdo grid, savat, chegirma (% yoki summa), to'lov turi (naqd/karta/o'tkazma/nasiya), mijoz biriktirish, chek (PDF — chop etish), qaytarish (return) zaxirani qaytaradi va nasiya balansini to'g'irlaydi.
-- **Mijozlar / yetkazib beruvchilar** — qarz balansi, tarix.
+- **Mijozlar / yetkazib beruvchilar** — qarz balansi, tarix, daftarga o'tish.
+- **Qarzlar** — mijoz va yetkazib beruvchi bo'yicha yagona daftar: to'lovlar, bo'lib to'lash, izohlar, qoldiq tarixi.
 - **Hisobotlar** — 7/30/90 kun: tushum, foyda, marja, o'rtacha chek, ABC-tahlil, kam qolgan tovarlar, o'lik zaxira. CSV (Excel) eksport + chop etish (PDF).
 - **Sozlamalar** — til, valyuta, o'nlik ajratgich, sana formati, hafta boshi; Light/Dark/System mavzu (real vaqt), accent rang, radius 0/8/16, zichlik, shrift o'lchami; bottom-nav elementlari (max 5) va dashboard widgetlarini tanlash/tartiblash; biznes (nom, logotip, NDS, chek matni, default min. qoldiq).
 - **Xotira** — `navigator.storage.estimate()`, jadval bo'yicha hajm + progress bar, eng katta 10 rasm, kesh tozalash, rasmlarni qayta siqish, eski loglarni o'chirish, hammasini o'chirish (tasdiqlash bilan).
@@ -92,6 +95,55 @@ src/
 - Sheet'lar nested ochilganda orqa fon meros olinadi (`resolveBackground`), shu sababli
   Savat → Tarix → Chek zanjirida "orqaga" POS sahifasiga qaytaradi.
 
+## Qarz daftari (ledger) — v3
+
+Mijoz ham, yetkazib beruvchi ham **bitta jadval** (`ledger`) orqali yuritiladi.
+Har bir yozuv: yo'nalish, summa, manba, izoh, to'lov usuli va **o'sha paytdagi
+qoldiq** (`balanceAfter`) — shu tufayli tarix istalgan nuqtadan tiklanadi.
+
+### Belgi konvensiyasi (butun ilova bo'ylab yagona)
+
+```
+balance > 0  →  kontragent BIZGA qarzdor
+balance < 0  →  BIZ kontragentga qarzdormiz
+```
+
+| Hodisa | direction | Mijoz balansi | Yetkazib beruvchi balansi |
+|---|---|---|---|
+| Nasiyaga sotildi / qarzga tovar oldik | `charge` | `+` (u qarzdor) | `−` (biz qarzdormiz) |
+| To'lov qabul qilindi / to'lov qilindi | `payment` | `−` | `+` |
+| Nasiya qaytarildi | `payment` (faqat to'lanmagan qism) | `−` | — |
+
+UI hech qachon xom belgini ko'rsatmaydi — `partyNet(balance)` orqali
+"bizga qarzdor / biz qarzdormiz" va musbat summa chiqariladi.
+
+### Muhim qoidalar
+
+- `Customer.balance` — **kesh (cache)**: faqat `applyPartyEntry()` / `saveCustomer()` orqali
+  o'zgaradi va har doim daftar yozuvi bilan birga (atomar tranzaksiya).
+- `opening` yozuvi — daftarning boshlang'ich nuqtasi; u **har doim eng birinchi**
+  hisoblanadi (`replayLedger` vaqt bo'yicha emas, tur bo'yicha ajratadi). Bu
+  `createdAt` yo'q legacy mijozlarda yakuniy balans buzilishining oldini oladi.
+- `sale` va `opening` yozuvlari o'chirilmaydi — sotuv/qoldiq bilan birga yashaydi.
+- Qaytarishda faqat **to'lanmagan** qism qarzdan chiqariladi (avans qarz emas).
+
+### Modul xaritasi
+
+| Fayl | Vazifa |
+|---|---|
+| `src/db/ledger.ts` | sof funksiyalar: `ledgerDelta`, `partyNet`, `replayLedger`, `ledgerStats` |
+| `src/db/migrations.ts` | `migrateV2toV3` — mavjud balans va nasiya sotuvlarini daftarga ko'chiradi (idempotent) |
+| `src/db/actions.ts` | `applyPartyEntry`, `recordPayment`, `adjustDebt`, `deleteLedgerEntry`, `completeSale`, `returnSale` |
+| `src/features/debts/` | `DebtsPage` (ro'yxat + sof pozitsiya), `PartySheet` (kartochka + tarix), `PaymentSheet`, `LedgerTimeline` |
+
+### Savatdan tez mijoz yaratish (nasiya)
+
+Nasiya tanlanganda savat ichida `QuickCustomer` ochiladi: mavjud mijozni tanlash
+yoki **ism + telefon** bilan yangi mijoz. Yangi mijoz bazaga faqat checkout
+paytida, `completeSale()` tranzaksiyasi ichida yoziladi — bekor qilinsa
+"bo'sh" kontakt qolmaydi. Avans maydoni darhol to'lanadigan qismni bildiradi;
+qolgani qarz sifatida yangi mijozga biriktiriladi.
+
 ## Mobil savat (POS) layouti
 
 ```
@@ -107,6 +159,6 @@ tugma doim ko'rinadi. `overscroll-behavior: contain` orqa fon "sakrashini" to'xt
 
 ## Keyingi bosqich uchun yo'nalishlar
 
-- `db.version(3)` — masalan, `sales.items` uchun alohida jadval
+- `db.version(4)` — masalan, `sales.items` uchun alohida jadval (juda katta bazalar uchun)
 - TanStack Virtual (juda katta ro'yxatlar), exceljs/pdfmake kutubxonalari
 - Swipe amallar va pull-to-refresh kengaytmalari

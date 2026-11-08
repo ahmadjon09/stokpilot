@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useNavigate } from 'react-router-dom';
-import { History, ImageOff, Minus, Package, Plus, Search, ShoppingCart, Trash2 } from 'lucide-react';
+import { AlertTriangle, History, ImageOff, Minus, Package, Plus, Search, ShoppingCart, Trash2, UserPlus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { db, type PayType, type Product } from '../../db/db';
 import { completeSale } from '../../db/actions';
@@ -11,6 +11,7 @@ import { useOpenSheet } from '../../shared/lib/nav';
 import { buzz, toast } from '../../shared/lib/misc';
 import NumberInput from '../../shared/ui/NumberInput';
 import { EmptyState, Segmented } from '../../shared/ui/bits';
+import QuickCustomer, { EMPTY_QUICK_CUSTOMER, type QuickCustomerValue } from './QuickCustomer';
 
 const CART_KEY = 'sp-cart';
 
@@ -50,6 +51,12 @@ export default function PosPage() {
   const [payType, setPayType] = useState<PayType>('cash');
   const [customerId, setCustomerId] = useState('');
   const [checkoutBusy, setCheckoutBusy] = useState(false);
+  /*
+   * Nasiya uchun mijoz ma'lumoti. `quick` — savat ichida yangi mijoz yaratish
+   * (Task 3): mijoz faqat checkout paytida bazaga yoziladi, shuning uchun
+   * bekor qilinsa hech qanday "bo'sh" yozuv qolmaydi.
+   */
+  const [quick, setQuick] = useState<QuickCustomerValue>(EMPTY_QUICK_CUSTOMER);
 
   useEffect(() => { sessionStorage.setItem(CART_KEY, JSON.stringify(cart)); }, [cart]);
 
@@ -93,21 +100,46 @@ export default function PosPage() {
       .filter((l) => l.qty > 0));
   };
 
+  /** Nasiya uchun mijoz tayyormi? (mavjud tanlangan yoki yangi ism kiritilgan) */
+  const debtCustomerReady = payType !== 'debt' || (
+    quick.mode === 'new'
+      ? quick.name.trim().length >= 2 && (!quick.phone.trim() || quick.valid)
+      : Boolean(customerId)
+  );
+
+  /** Nasiyada qarzga yoziladigan qism (avans hisobga olingan holda) */
+  const debtPart = payType === 'debt'
+    ? round2(total - Math.min(Math.max(quick.advance ?? 0, 0), total))
+    : 0;
+
   const checkout = async () => {
     if (lines.length === 0 || checkoutBusy) return;
-    if (payType === 'debt' && !customerId) { toast(t('sales.debtNeedsCustomer')); buzz(30); return; }
+    if (payType === 'debt' && !debtCustomerReady) {
+      toast(t('quickCust.selectNeeded'));
+      buzz(30);
+      return;
+    }
     setCheckoutBusy(true);
     try {
       const sale = await completeSale({
         items: lines.map((l) => ({ product: l.product, qty: l.qty })),
         discountType, discountValue: discountValue ?? 0,
-        payType, customerId, note: '',
+        payType,
+        // Yangi mijoz bo'lsa ID bo'sh qoladi — uni tranzaksiya ichida yaratamiz
+        customerId: payType === 'debt' && quick.mode === 'new' ? '' : customerId,
+        note: '',
+        newCustomer: payType === 'debt' && quick.mode === 'new'
+          ? { name: quick.name.trim(), phone: quick.phone.trim() }
+          : undefined,
+        paidNow: payType === 'debt' ? (quick.advance ?? 0) : undefined,
       });
       setCart([]);
       setDiscountType('none');
       setDiscountValue(null);
       setCustomerId('');
+      setQuick(EMPTY_QUICK_CUSTOMER);
       setPayType('cash');
+      if (payType === 'debt' && quick.mode === 'new') toast(t('quickCust.created'));
       buzz(20);
       // Chekni ochishda orqa fon sifatida JORIY (menyu bilan bir xil) holat beriladi.
       // `resolveBackground` orqali — sheet ustida yangi sheet ochilsa ham POS
@@ -194,6 +226,7 @@ export default function PosPage() {
 
               {/* Chegirma / to'lov / jami — scroll zonasida (ro'yxat bilan birga) */}
               <div className="cart-options space-y-3 border-t border-line p-3.5">
+                {/* Chegirma: turi + qiymati (bir qatorda, mobil uchun ixcham) */}
                 <div className="grid grid-cols-2 gap-2">
                   <Segmented value={discountType} onChange={(v) => { setDiscountType(v); if (v === 'none') setDiscountValue(null); }} options={[
                     { value: 'none', label: t('sales.discount.none') },
@@ -203,28 +236,54 @@ export default function PosPage() {
                   {discountType !== 'none' ? (
                     <NumberInput value={discountValue} onChange={setDiscountValue} placeholder={discountType === 'percent' ? '0 %' : '0'} ariaLabel={t('sales.discount')} />
                   ) : (
-                    <select className="input" value={customerId} onChange={(e) => setCustomerId(e.target.value)} aria-label={t('sales.customer')}>
-                      <option value="">{t('sales.noCustomer')}</option>
-                      {customers.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-                    </select>
+                    /* Chegirma yo'q bo'lsa — joy bo'sh qolmasin: naqd sotuvda
+                       mijozni tanlash (nasiyada bu blok pastda, QuickCustomer) */
+                    payType !== 'debt' ? (
+                      <select className="input" value={customerId} onChange={(e) => setCustomerId(e.target.value)} aria-label={t('sales.customer')}>
+                        <option value="">{t('sales.noCustomer')}</option>
+                        {customers.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                      </select>
+                    ) : <div />
                   )}
                 </div>
-                {discountType !== 'none' && (
-                  <select className="input" value={customerId} onChange={(e) => setCustomerId(e.target.value)} aria-label={t('sales.customer')}>
-                    <option value="">{t('sales.noCustomer')}</option>
-                    {customers.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-                  </select>
-                )}
-                <Segmented value={payType} onChange={setPayType} options={[
+                <Segmented value={payType} onChange={(v) => {
+                  setPayType(v);
+                  // Nasiyadan chiqilsa avans holati tozalanadi
+                  if (v !== 'debt') setQuick((q) => ({ ...q, advance: null }));
+                }} options={[
                   { value: 'cash', label: t('sales.pay.cash') },
                   { value: 'card', label: t('sales.pay.card') },
                   { value: 'transfer', label: t('sales.pay.transfer') },
                   { value: 'debt', label: t('sales.pay.debt') },
                 ]} />
+
+                {/* ── NASIYA: savat ichida mijoz tanlash / yangi mijoz ────────
+                    Nasiya tanlanganda bu blok ochiladi. Yangi mijoz faqat
+                    checkout paytida bazaga yoziladi (atomar tranzaksiya). */}
+                {payType === 'debt' && (
+                  <div className="space-y-1.5">
+                    <p className="flex items-center gap-1.5 text-[0.75rem] font-bold text-mute">
+                      <UserPlus size={13} strokeWidth={1.5} /> {t('sales.customer')}
+                    </p>
+                    <QuickCustomer value={quick} onChange={setQuick} total={total} />
+                    {!debtCustomerReady && (
+                      <p className="flex items-start gap-1.5 text-[0.6875rem]" style={{ color: 'var(--warn)' }}>
+                        <AlertTriangle size={12} strokeWidth={2} className="mt-0.5 flex-none" />
+                        {t('quickCust.selectNeeded')}
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div className="space-y-1 text-[0.8438rem]">
                   <div className="flex justify-between text-mute"><span>{t('sales.subtotal')}</span><span className="tnum">{formatMoney(subtotal)}</span></div>
                   {discount > 0 && <div className="flex justify-between" style={{ color: 'var(--bad)' }}><span>{t('sales.discount')}</span><span className="tnum">−{formatMoney(discount)}</span></div>}
                   {vatPart > 0 && <div className="flex justify-between text-mute"><span>{t('sales.vatIncluded')} ({formatNumber(vat)}%)</span><span className="tnum">{formatMoney(vatPart)}</span></div>}
+                  {payType === 'debt' && debtPart > 0 && (
+                    <div className="flex justify-between font-semibold" style={{ color: 'var(--bad)' }}>
+                      <span>{t('quickCust.debtWillBe')}</span>
+                      <span className="tnum">{formatMoney(debtPart)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between pt-1 text-[1rem] font-extrabold"><span>{t('common.total')}</span><span className="tnum">{formatMoney(total)}</span></div>
                 </div>
               </div>
@@ -245,7 +304,12 @@ export default function PosPage() {
             <p className="text-[0.6875rem] font-semibold uppercase tracking-wide text-mute">{t('common.total')}</p>
             <p className="tnum truncate text-[1.0625rem] font-extrabold leading-tight">{formatMoney(total)}</p>
           </div>
-          <button type="button" className="btn btn-primary flex-1" disabled={checkoutBusy || lines.length === 0} onClick={() => void checkout()}>
+          <button
+            type="button"
+            className="btn btn-primary flex-1"
+            disabled={checkoutBusy || lines.length === 0 || !debtCustomerReady}
+            onClick={() => void checkout()}
+          >
             {t('sales.checkout')}
           </button>
         </div>

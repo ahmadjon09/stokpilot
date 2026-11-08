@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  BarChart3, Boxes, LayoutDashboard, Package, Plus, Settings,
+  BarChart3, Boxes, HandCoins, LayoutDashboard, Package, Plus, Settings,
   ShoppingCart, Users, WifiOff, Zap,
   type LucideIcon,
 } from 'lucide-react';
@@ -17,11 +17,12 @@ export const NAV_META: Record<NavKey, { icon: LucideIcon; labelKey: string; path
   sales: { icon: ShoppingCart, labelKey: 'nav.sales', path: '/sales' },
   stock: { icon: Boxes, labelKey: 'nav.stock', path: '/stock' },
   customers: { icon: Users, labelKey: 'nav.customers', path: '/customers' },
+  debts: { icon: HandCoins, labelKey: 'nav.debts', path: '/debts' },
   reports: { icon: BarChart3, labelKey: 'nav.reports', path: '/reports' },
   settings: { icon: Settings, labelKey: 'nav.settings', path: '/settings' },
 };
 
-const SIDEBAR_ORDER: NavKey[] = ['dashboard', 'products', 'sales', 'stock', 'customers', 'reports', 'settings'];
+const SIDEBAR_ORDER: NavKey[] = ['dashboard', 'products', 'sales', 'stock', 'customers', 'debts', 'reports', 'settings'];
 
 function useOnline(): boolean {
   const [online, setOnline] = useState<boolean>(() => navigator.onLine);
@@ -106,6 +107,7 @@ export default function AppShell() {
         : location.pathname.startsWith('/stock') ? 'stock.title'
           : location.pathname.startsWith('/sales') ? 'sales.title'
             : location.pathname.startsWith('/customers') ? 'customers.title'
+              : location.pathname.startsWith('/debts') ? 'debt.title'
               : location.pathname.startsWith('/reports') ? 'reports.title'
                 : 'settings.title';
 

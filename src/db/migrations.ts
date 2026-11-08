@@ -12,9 +12,12 @@
 
 import type { Transaction } from 'dexie';
 import {
-  validateCategory, validateCustomer, validateImage, validateLog, validateMove, validateProduct, validateSale,
+  validateCategory, validateCustomer, validateImage, validateLedgerEntry, validateLog, validateMove,
+  validateProduct, validateSale,
 } from './validate';
-import type { ImageRec, Product, Sale } from './db';
+import type { Customer, ImageRec, LedgerEntry, Product, Sale } from './db';
+import { replayLedger } from './ledger';
+import { round2 } from '../shared/lib/format';
 
 export interface MigrationReport {
   /** Jadval bo'yicha tikdan o'tgan yozuvlar soni */
@@ -145,7 +148,20 @@ async function reconcileSaleNumbers(tx: Transaction, report: MigrationReport): P
  * Butun bazani tekshirib chiqadigan yadro funksiyasi.
  * `tx` — Dexie tranzaksiyasi (upgrade ichida ham, oddiy repair'da ham ishlaydi).
  */
-export async function normalizeDatabase(tx: Transaction): Promise<MigrationReport> {
+export interface NormalizeOptions {
+  /**
+   * `ledger` jadvalini ham tekshirish.
+   * FAQAT v3 upgrade tranzaksiyasi yoki tashqi tranzaksiya ichida true bo'ladi:
+   * v2 upgrade tranzaksiyasida bu jadval hali mavjud emas ("Table ledger not
+   * part of transaction" xatosi chiqadi).
+   */
+  ledger?: boolean;
+}
+
+export async function normalizeDatabase(
+  tx: Transaction,
+  options: NormalizeOptions = {},
+): Promise<MigrationReport> {
   const report = emptyReport();
 
   // 1) Mustaqil jadvallar — validatsiya va to'ldirish
@@ -155,6 +171,10 @@ export async function normalizeDatabase(tx: Transaction): Promise<MigrationRepor
   await normalizeTable(tx, 'moves', validateMove, report);
   await normalizeTable(tx, 'sales', validateSale, report);
   await normalizeTable(tx, 'customers', validateCustomer, report);
+  // `ledger` jadvali v3 da paydo bo'ldi — faqat mavjud tranzaksiyada tekshiriladi
+  if (options.ledger) {
+    await normalizeTable(tx, 'ledger', validateLedgerEntry, report);
+  }
   await normalizeTable(tx, 'logs', validateLog, report);
 
   // 2) Bog'lanishlarni tiklash
@@ -167,4 +187,137 @@ export async function normalizeDatabase(tx: Transaction): Promise<MigrationRepor
 /** v1 → v2: indekslar kengaytirildi (barcode, type, status, action) + to'liq normalizatsiya */
 export async function migrateV1toV2(tx: Transaction): Promise<MigrationReport> {
   return normalizeDatabase(tx);
+}
+
+/* ---------------------------------------------------------------------- */
+/*  v2 → v3: qarz daftari (ledger) va nasiya/avans ajratmasi               */
+/* ---------------------------------------------------------------------- */
+
+/** Imzolangan balans → boshlang'ich (opening) yozuvi */
+function openingEntryFor(party: Customer, id: string): LedgerEntry {
+  return {
+    id,
+    partyId: party.id,
+    partyKind: party.kind,
+    // "charge" — qarz oshgan deb qaraladi; balans manfiy bo'lsa yozuv
+    // `balanceAfter` orqali to'g'ri ifodalanadi (ledgerDelta emas, u
+    // opening uchun ishlatilmaydi).
+    direction: 'charge',
+    source: 'opening',
+    amount: Math.abs(round2(party.balance)),
+    balanceAfter: round2(party.balance),
+    note: '',
+    method: '',
+    createdAt: party.createdAt,
+  };
+}
+
+/**
+ * Bazani v3 ga o'tkazadi:
+ *
+ *  1. `sales.paidAmount` / `sales.debtAmount` — legacy cheklar uchun payType
+ *     asosida to'ldiriladi (validateSale buni allaqachon qiladi).
+ *  2. Har bir kontragent uchun `ledger` ochiladi:
+ *     - balans != 0 bo'lsa — `opening` yozuvi (eski qarz tarixi saqlanadi);
+ *     - nasiya sotuvlari bo'lsa — har biri uchun `sale` yozuvi, sanasi bilan
+ *       (shunda tarix haqiqiy xronologiyada ko'rinadi);
+ *     - yakuniy balans `Customer.balance` bilan moslashtiriladi.
+ *  3. Qoldiq yozuvlar ketma-ket qayta hisoblanadi (`replayLedger`) —
+ *     `balanceAfter` maydoni har doim haqiqatga mos bo'ladi.
+ *
+ * Funksiya IDEMPOTENT: `ledger` da allaqachon yozuv bor kontragent uchun
+ * hech narsa qayta yaratilmaydi.
+ */
+export async function migrateV2toV3(tx: Transaction): Promise<MigrationReport> {
+  // 1) Avval oddiy normalizatsiya (sales.paid/debt, customers.balance va h.k.)
+  const report = await normalizeDatabase(tx, { ledger: true });
+
+  const customersTable = tx.table('customers');
+  const salesTable = tx.table('sales');
+  const ledgerTable = tx.table('ledger');
+
+  const customers: Customer[] = await customersTable.toArray();
+  if (customers.length === 0) return report;
+
+  const sales: Sale[] = await salesTable.toArray();
+  const existing: LedgerEntry[] = await ledgerTable.toArray();
+
+  const byParty = new Map<string, LedgerEntry[]>();
+  for (const e of existing) {
+    const list = byParty.get(e.partyId) ?? [];
+    list.push(e);
+    byParty.set(e.partyId, list);
+  }
+
+  const newEntries: LedgerEntry[] = [];
+  const touchedParties: Customer[] = [];
+
+  for (const party of customers) {
+    const own = byParty.get(party.id) ?? [];
+    if (own.length > 0) continue; // allaqachon daftar bor — tegilmaydi
+
+    const partySales = sales
+      .filter((s) => s.customerId === party.id && s.payType === 'debt' && s.status === 'done')
+      .sort((a, b) => a.createdAt - b.createdAt);
+
+    /*
+     * Balansni "orqaga" hisoblaymiz: mavjud balansdan nasiya sotuvlarini
+     * ayirib tashlaymiz — natija eski (qo'lda kiritilgan yoki oldingi
+     * to'lovlardan qolgan) qarz bo'ladi. Shu qoldiq `opening` yozuvi bo'ladi,
+     * keyin nasiya sotuvlari xronologik tartibda qo'shiladi.
+     */
+    const debtFromSales = round2(partySales.reduce((s, x) => s + Math.abs(x.debtAmount || x.total), 0));
+    const opening = round2(party.balance - (party.kind === 'customer' ? debtFromSales : 0));
+
+    const entries: LedgerEntry[] = [];
+    if (opening !== 0) {
+      const base = openingEntryFor({ ...party, balance: opening }, `open-${party.id}`);
+      // Boshlang'ich qoldiq eng birinchi nasiya sotuvidan oldin bo'lishi kerak —
+      // aks holda tarix lentasida tartib buziladi (legacy `createdAt` yo'q bo'lsa
+      // validator uni "hozir" deb to'ldiradi).
+      const firstSaleAt = partySales[0]?.createdAt;
+      entries.push(
+        firstSaleAt ? { ...base, createdAt: Math.min(base.createdAt, firstSaleAt - 1) } : base,
+      );
+    }
+    for (const sale of partySales) {
+      const amount = Math.abs(sale.debtAmount || sale.total);
+      if (amount === 0) continue;
+      entries.push({
+        id: `sale-${sale.id}`,
+        partyId: party.id,
+        partyKind: party.kind,
+        direction: 'charge',
+        source: 'sale',
+        amount,
+        balanceAfter: 0, // quyida qayta hisoblanadi
+        note: '',
+        method: '',
+        saleId: sale.id,
+        saleNumber: sale.number,
+        createdAt: sale.createdAt,
+      });
+    }
+
+    if (entries.length === 0) continue;
+
+    const replayed = replayLedger(entries, 0);
+    newEntries.push(...replayed.entries);
+    // Yakuniy balans o'zgarmasligi kafolatlanadi (ma'lumot yo'qolmaydi)
+    if (round2(replayed.balance) !== round2(party.balance)) {
+      touchedParties.push({ ...party, balance: round2(replayed.balance) });
+    }
+  }
+
+  if (newEntries.length) await ledgerTable.bulkPut(newEntries);
+  if (touchedParties.length) {
+    await customersTable.bulkPut(touchedParties);
+    for (let i = 0; i < touchedParties.length; i++) bump(report, 'repaired', 'customers');
+  }
+  if (newEntries.length) {
+    report.repaired.ledger = (report.repaired.ledger ?? 0) + newEntries.length;
+    report.total += newEntries.length;
+  }
+
+  return report;
 }
